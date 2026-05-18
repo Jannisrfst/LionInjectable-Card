@@ -1,0 +1,141 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '8.3.8'
+}
+
+group   = 'lion.client'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+repositories { mavenCentral() }
+
+configurations {
+    shade
+}
+
+dependencies {
+    compileOnly 'org.ow2.asm:asm:9.7'
+    shade       'org.ow2.asm:asm:9.7'
+
+    compileOnly 'org.ow2.asm:asm-commons:9.7'
+    shade       'org.ow2.asm:asm-commons:9.7'
+    shade       'org.ow2.asm:asm-tree:9.7'
+
+    compileOnly 'com.google.code.gson:gson:2.8.9'
+}
+
+def mcLibs = file("${System.getenv('APPDATA') ?: System.properties['user.home']}/.minecraft/libraries/org/lwjgl/lwjgl")
+def lwjglJar = new File(mcLibs, 'lwjgl/2.9.4-nightly-20150209/lwjgl-2.9.4-nightly-20150209.jar')
+def lwjglUtilJar = new File(mcLibs, 'lwjgl_util/2.9.4-nightly-20150209/lwjgl_util-2.9.4-nightly-20150209.jar')
+if (lwjglJar.exists() && lwjglUtilJar.exists()) {
+    dependencies {
+        compileOnly files(lwjglJar)
+        compileOnly files(lwjglUtilJar)
+    }
+    logger.lifecycle("Using LWJGL from ${lwjglJar.parent}")
+} else {
+    logger.warn("LWJGL 2.9.4-nightly jars not found in .minecraft/libraries; some module compiles may fail")
+}
+
+def mcRoot = "${System.getenv('APPDATA') ?: System.properties['user.home']}/.minecraft"
+def authlibJar = file("${mcRoot}/libraries/com/mojang/authlib/1.5.21/authlib-1.5.21.jar")
+if (authlibJar.exists()) {
+    dependencies { compileOnly files(authlibJar) }
+} else {
+    logger.warn("authlib-1.5.21.jar not found in .minecraft/libraries; AntiBot may not compile")
+}
+
+def forgeBin = file("${System.properties['user.home']}/.gradle/caches/minecraft/net/minecraftforge/forge/1.8.9-11.15.1.2318-1.8.9/stable/22/forgeBin-1.8.9-11.15.1.2318-1.8.9.jar")
+if (forgeBin.exists()) {
+    logger.lifecycle("Using deobf Minecraft from ${forgeBin}")
+    dependencies { compileOnly files(forgeBin) }
+} else {
+    logger.warn("forgeBin not found at ${forgeBin}; falling back to stubs only")
+}
+
+def mcpSrg = file("${System.properties['user.home']}/.gradle/caches/minecraft/de/oceanlabs/mcp/mcp_stable/22/srgs/mcp-srg.srg")
+def mcpNotch = file("${System.properties['user.home']}/.gradle/caches/minecraft/de/oceanlabs/mcp/mcp_stable/22/srgs/mcp-notch.srg")
+if (mcpSrg.exists()) {
+    logger.lifecycle("Embedding MCP->SRG mappings from ${mcpSrg}")
+    tasks.named('processResources', Copy) {
+        from(mcpSrg) {
+            into 'lion/mappings/'
+            rename '.*', 'mcp-srg.srg'
+        }
+    }
+} else {
+    logger.warn("mcp-srg.srg not found at ${mcpSrg}; Forge runtime won't be able to remap MCP refs to SRG")
+}
+if (mcpNotch.exists()) {
+    logger.lifecycle("Embedding MCP->Notch mappings from ${mcpNotch}")
+    tasks.named('processResources', Copy) {
+        from(mcpNotch) {
+            into 'lion/mappings/'
+            rename '.*', 'mcp-notch.srg'
+        }
+    }
+} else {
+    logger.warn("mcp-notch.srg not found at ${mcpNotch}; raw vanilla support unavailable")
+}
+
+sourceSets {
+    stubs {
+        java.srcDir 'src/stubs/java'
+    }
+    forgeShim {
+        java.srcDir 'src/forgeShim/java'
+    }
+    main {
+        compileClasspath += sourceSets.stubs.output
+    }
+}
+
+jar {
+    archiveBaseName = 'client-thin'
+    archiveVersion  = ''
+    from(sourceSets.main.output)
+    from(sourceSets.forgeShim.output)
+}
+
+shadowJar {
+    archiveBaseName  = 'client'
+    archiveVersion   = ''
+    archiveClassifier = ''
+    configurations   = [project.configurations.shade]
+    from(sourceSets.forgeShim.output)
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    relocate 'org.objectweb.asm', 'lion.shaded.asm'
+
+    exclude 'META-INF/*.RSA', 'META-INF/*.SF'
+    exclude 'META-INF/maven/**', 'module-info.class'
+    exclude 'LICENSE', 'LICENSE.txt', 'NOTICE'
+
+    manifest {
+        attributes(
+            'Implementation-Title'    : 'LionInjectable Client',
+            'Implementation-Version'  : project.version,
+            'Main-Class'              : 'lion.client.Agent',
+
+            'Premain-Class'           : 'lion.client.agent.LionAgent',
+            'Agent-Class'             : 'lion.client.agent.LionAgent',
+            'Can-Redefine-Classes'    : 'true',
+            'Can-Retransform-Classes' : 'true',
+
+            'Built-By'                : System.getProperty('user.name')
+        )
+    }
+}
+
+tasks.register('stageJar', Copy) {
+    from shadowJar
+    into rootProject.file('../build/stage')
+    rename '.*', 'client.jar'
+}
+tasks.named('build') { dependsOn shadowJar }
+tasks.named('build') { finalizedBy 'stageJar' }

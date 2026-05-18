@@ -1,0 +1,10 @@
+Manifest-Version: 1.0
+Implementation-Title: LionInjectable Client
+Implementation-Version: 1.0.0
+Main-Class: lion.client.Agent
+Premain-Class: lion.client.agent.LionAgent
+Agent-Class: lion.client.agent.LionAgent
+Can-Redefine-Classes: true
+Can-Retransform-Classes: true
+Built-By: Lion
+
