@@ -94,12 +94,6 @@ public final class LionDeobfTransformer implements IClassTransformer {
             mcpFieldNameToSrgGlobal = Collections.unmodifiableMap(fieldFallback);
             mcpMethodSigToSrgGlobal = Collections.unmodifiableMap(methodFallback);
 
-            try {
-                lion.client.ClientLogger.info("[LionDeobf] loaded MCP->SRG mappings: " + methodCount
-                        + " methods, " + fieldCount + " fields"
-                        + " (global fallbacks: " + methodFallback.size() + " methods, "
-                        + fieldFallback.size() + " fields)");
-            } catch (Throwable ignored) {}
             return true;
         }
     }

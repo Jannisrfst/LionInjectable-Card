@@ -46,8 +46,7 @@ public final class ClientLogger {
             logFile = p;
             write("INFO ", "==== Lion client log session started (primary=" + p
                     + " fallback=" + fallbackLog + ") ====");
-        } catch (IOException e) {
-            System.err.println("[LionClient] could not create log file: " + e);
+        } catch (IOException ignored) {
         }
     }
 
@@ -65,7 +64,6 @@ public final class ClientLogger {
 
     private static void write(String level, String msg) {
         String line = "[" + LocalDateTime.now().format(TS) + "][" + level + "] " + msg + System.lineSeparator();
-        System.err.print(line);
         byte[] bytes = line.getBytes(StandardCharsets.UTF_8);
         lock.lock();
         try {

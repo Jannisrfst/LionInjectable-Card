@@ -36,10 +36,7 @@ public class EventBus {
                 if (event.isCanceled() && !m.getAnnotation(SubscribeEvent.class).receiveCanceled()) continue;
                 try {
                     m.invoke(listener, event);
-                } catch (Throwable t) {
-                    System.err.println("[EventBus] " + listener.getClass().getName()
-                            + "." + m.getName() + " threw: " + t);
-                    t.printStackTrace();
+                } catch (Throwable ignored) {
                 }
             }
         }

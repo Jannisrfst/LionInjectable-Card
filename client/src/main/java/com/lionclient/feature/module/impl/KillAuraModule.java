@@ -8,6 +8,7 @@ import com.lionclient.feature.module.Category;
 import com.lionclient.feature.module.Module;
 import com.lionclient.feature.setting.BooleanSetting;
 import com.lionclient.feature.setting.DecimalSetting;
+import com.lionclient.feature.setting.EnumSetting;
 import com.lionclient.feature.setting.NumberSetting;
 import com.lionclient.util.MouseButtonHelper;
 import java.util.ArrayList;
@@ -41,10 +42,13 @@ public final class KillAuraModule extends Module {
     private static KillAuraModule instance;
     public static KillAuraModule getInstance() { return instance; }
 
+    public enum MoveFix { STRICT, SILENT }
+
     private final DecimalSetting targetCps = new DecimalSetting("Target CPS", 1.0D, 20.0D, 0.5D, 17.0D);
     private final DecimalSetting attackRange = new DecimalSetting("Range (Attack)", 3.0D, 6.0D, 0.05D, 3.0D);
     private final DecimalSetting swingRange = new DecimalSetting("Range (Swing)", 3.0D, 8.0D, 0.05D, 4.5D);
     private final DecimalSetting aimRange = new DecimalSetting("Range (Aim)", 3.0D, 8.0D, 0.05D, 4.5D);
+    private final NumberSetting fov = new NumberSetting("FOV", 1, 360, 1, 360);
     private final NumberSetting switchDelay = new NumberSetting("Switch Delay", 50, 1000, 25, 50);
     private final NumberSetting targets = new NumberSetting("Targets", 1, 10, 1, 3);
     private final BooleanSetting targetInvis = new BooleanSetting("Target Invis", true);
@@ -54,6 +58,7 @@ public final class KillAuraModule extends Module {
     private final BooleanSetting notUsingItem = new BooleanSetting("Not Using Item", false);
     private final BooleanSetting weaponOnly = new BooleanSetting("Weapon Only", false);
     private final BooleanSetting silentAim = new BooleanSetting("Silent Aim", false);
+    private final EnumSetting<MoveFix> moveFix = new EnumSetting<MoveFix>("MoveFix", MoveFix.values(), MoveFix.STRICT);
 
     private final Map<Integer, Integer> hitMap = new HashMap<Integer, Integer>();
     private final Random random = new Random();
@@ -72,6 +77,7 @@ public final class KillAuraModule extends Module {
         addSetting(attackRange);
         addSetting(swingRange);
         addSetting(aimRange);
+        addSetting(fov);
         addSetting(switchDelay);
         addSetting(targets);
         addSetting(targetInvis);
@@ -81,6 +87,13 @@ public final class KillAuraModule extends Module {
         addSetting(notUsingItem);
         addSetting(weaponOnly);
         addSetting(silentAim);
+        addSetting(moveFix);
+        moveFix.setVisibility(new java.util.function.BooleanSupplier() {
+            @Override
+            public boolean getAsBoolean() {
+                return silentAim.isEnabled();
+            }
+        });
         pointedEntityField = findRendererField("field_78528_u", "pointedEntity");
     }
 
@@ -142,6 +155,9 @@ public final class KillAuraModule extends Module {
         event.pitch = Float.valueOf(smooth[1]);
         if (silentAim.isEnabled()) {
             event.silent = true;
+            if (moveFix.getValue() == MoveFix.SILENT) {
+                ClientRotationHelper.get().requestSilentMoveFix();
+            }
         }
     }
 
@@ -329,8 +345,26 @@ public final class KillAuraModule extends Module {
         if (distance > maxRange) {
             return null;
         }
+        if (!isInFov(minecraft, entity)) {
+            return null;
+        }
 
         return new Candidate(player, distance);
+    }
+
+    private boolean isInFov(Minecraft minecraft, Entity entity) {
+        float fovValue = (float) fov.getValue();
+        if (fovValue >= 360.0F) {
+            return true;
+        }
+        float currentYaw = minecraft.thePlayer.rotationYaw;
+        float currentPitch = minecraft.thePlayer.rotationPitch;
+        float[] rotations = KillAuraRotationUtils.getRotations(entity, 100.0D, 100.0D, currentYaw, currentPitch);
+        if (rotations == null) {
+            return false;
+        }
+        float yawDifference = Math.abs(MathHelper.wrapAngleTo180_float(rotations[0] - currentYaw));
+        return yawDifference <= fovValue * 0.5F;
     }
 
     private KillAuraTarget buildKillAuraTarget(EntityLivingBase entity, double distanceToBoundingBox, double maxRange) {

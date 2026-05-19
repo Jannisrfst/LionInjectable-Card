@@ -18,9 +18,13 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 public final class LionClient {
-    public static final String MOD_ID  = "lionclient";
-    public static final String NAME    = "LionClient";
-    public static final String VERSION = "1.1.1";
+    public static final String MOD_ID  = "lionclientinjectable";
+    public static final String NAME    = "LionClientInjectable";
+    public static final String VERSION = "1.0.0";
+
+    static {
+        registerFakeModContainer();
+    }
 
     private static LionClient instance;
 
@@ -42,21 +46,14 @@ public final class LionClient {
                 net.minecraftforge.common.MinecraftForge.EVENT_BUS;
         net.minecraftforge.fml.common.eventhandler.EventBus fmlBus =
                 net.minecraftforge.fml.common.FMLCommonHandler.instance().bus();
-        lion.client.ClientLogger.info("[LionClient] forgeBus=" + System.identityHashCode(forgeBus)
-                + " (" + forgeBus.getClass().getName() + ")"
-                + " fmlBus=" + System.identityHashCode(fmlBus)
-                + " (" + fmlBus.getClass().getName() + ")"
-                + " sameBus=" + (forgeBus == fmlBus));
         try {
             forgeBus.register(this);
-            lion.client.ClientLogger.info("[LionClient] registered on MinecraftForge.EVENT_BUS");
         } catch (Throwable t) {
             lion.client.ClientLogger.error("[LionClient] forgeBus.register failed", t);
         }
         if (fmlBus != forgeBus) {
             try {
                 fmlBus.register(this);
-                lion.client.ClientLogger.info("[LionClient] registered on FMLCommonHandler bus");
             } catch (Throwable t) {
                 lion.client.ClientLogger.error("[LionClient] fmlBus.register failed", t);
             }
@@ -65,28 +62,15 @@ public final class LionClient {
 
     public void toggleClickGui() {
         Minecraft mc = Minecraft.getMinecraft();
-        try {
-            lion.client.ClientLogger.info("[LionClient] toggleClickGui: currentScreen=" + mc.currentScreen
-                    + " style=" + ClickGuiModule.getGuiStyle()
-                    + " classic=" + System.identityHashCode(clickGuiScreen)
-                    + " modern=" + System.identityHashCode(modernClickGuiScreen));
-        } catch (Throwable ignored) {}
         if (mc.currentScreen == clickGuiScreen || mc.currentScreen == modernClickGuiScreen) {
             mc.displayGuiScreen(null);
             return;
         }
         if (mc.currentScreen == null) {
-            try {
-                net.minecraft.client.gui.GuiScreen target = ClickGuiModule.getGuiStyle() == ClickGuiModule.GuiStyle.CLASSIC
-                        ? clickGuiScreen
-                        : modernClickGuiScreen;
-                mc.displayGuiScreen(target);
-                lion.client.ClientLogger.info("[LionClient] displayGuiScreen called with "
-                        + (target != null ? target.getClass().getName() : "null")
-                        + " — after: currentScreen=" + mc.currentScreen);
-            } catch (Throwable t) {
-                lion.client.ClientLogger.error("[LionClient] displayGuiScreen threw", t);
-            }
+            net.minecraft.client.gui.GuiScreen target = ClickGuiModule.getGuiStyle() == ClickGuiModule.GuiStyle.CLASSIC
+                    ? clickGuiScreen
+                    : modernClickGuiScreen;
+            mc.displayGuiScreen(target);
         }
     }
 
@@ -155,5 +139,136 @@ public final class LionClient {
     @SubscribeEvent
     public void onRenderOverlay(RenderGameOverlayEvent.Text event) {
         moduleManager.onRenderOverlay(event);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void registerFakeModContainer() {
+        try {
+            Class<?> loaderCls    = Class.forName("net.minecraftforge.fml.common.Loader");
+            Class<?> containerCls = Class.forName("net.minecraftforge.fml.common.ModContainer");
+            Object   loader       = loaderCls.getMethod("instance").invoke(null);
+
+            final java.io.File src = resolveOurJarFile();
+
+            final Object fake = java.lang.reflect.Proxy.newProxyInstance(
+                    LionClient.class.getClassLoader(),
+                    new Class<?>[]{ containerCls },
+                    (proxy, method, args) -> {
+                        switch (method.getName()) {
+                            case "getSource":            return src;
+                            case "getModId":             return MOD_ID;
+                            case "getName":              return NAME;
+                            case "getVersion":           return VERSION;
+                            case "isImmutable":          return true;
+                            case "getOwnedPackages":     return java.util.Collections.emptyList();
+                            case "getRequirements":      return java.util.Collections.emptySet();
+                            case "getDependencies":      return java.util.Collections.emptyList();
+                            case "getDependants":        return java.util.Collections.emptyList();
+                            case "getCustomModProperties":  return java.util.Collections.emptyMap();
+                            case "getSharedModDescriptor":  return java.util.Collections.emptyMap();
+                            default:
+                                Class<?> rt = method.getReturnType();
+                                if (rt == boolean.class || rt == Boolean.class) return false;
+                                if (rt == int.class    || rt == Integer.class)  return 0;
+                                return null;
+                        }
+                    });
+
+            try {
+                java.util.List<Object> list =
+                        (java.util.List<Object>) loaderCls.getMethod("getActiveModList").invoke(loader);
+                if (!list.contains(fake)) list.add(fake);
+            } catch (Throwable ignored) {}
+
+            java.lang.reflect.Field modControllerField = loaderCls.getDeclaredField("modController");
+            modControllerField.setAccessible(true);
+            Object modController = modControllerField.get(loader);
+            if (modController == null) {
+                lion.client.ClientLogger.error("[FakeMod] modController is null on Loader", null);
+                return;
+            }
+
+            try {
+                java.lang.reflect.Field activeContainerField =
+                        modController.getClass().getDeclaredField("activeContainer");
+                activeContainerField.setAccessible(true);
+                activeContainerField.set(modController, fake);
+                Object verify = activeContainerField.get(modController);
+                lion.client.ClientLogger.info("[FakeMod] activeContainer set, verify=" + (verify == fake));
+            } catch (Throwable t) {
+                lion.client.ClientLogger.error("[FakeMod] set activeContainer failed", t);
+            }
+
+            try {
+                java.lang.reflect.Field packageOwnersField =
+                        modController.getClass().getDeclaredField("packageOwners");
+                packageOwnersField.setAccessible(true);
+                Object packageOwners = packageOwnersField.get(modController);
+                if (packageOwners != null) {
+                    java.lang.reflect.Method put = null;
+                    for (java.lang.reflect.Method m : packageOwners.getClass().getMethods()) {
+                        if ("put".equals(m.getName()) && m.getParameterTypes().length == 2) {
+                            put = m;
+                            break;
+                        }
+                    }
+                    if (put != null) {
+                        java.util.Set<String> pkgs = scanJarPackages(src);
+                        for (String pkg : pkgs) put.invoke(packageOwners, pkg, fake);
+                        lion.client.ClientLogger.info("[FakeMod] added " + pkgs.size() + " packages to packageOwners");
+                    }
+                }
+            } catch (Throwable t) {
+                lion.client.ClientLogger.error("[FakeMod] populate packageOwners failed", t);
+            }
+        } catch (Throwable t) {
+            try { lion.client.ClientLogger.error("[FakeMod] registerFakeModContainer failed", t); }
+            catch (Throwable ignored) {}
+        }
+    }
+
+    private static java.io.File resolveOurJarFile() {
+        try {
+            java.net.URL url = LionClient.class.getProtectionDomain().getCodeSource().getLocation();
+            if (url == null) return null;
+            String s = url.toString();
+            if (s.startsWith("jar:")) {
+                s = s.substring(4);
+                int bang = s.indexOf("!/");
+                if (bang >= 0) s = s.substring(0, bang);
+            }
+            if (s.startsWith("file:")) {
+                try { return new java.io.File(new java.net.URI(s)); }
+                catch (Throwable ignored) {
+                    String path = s.substring(5);
+                    while (path.startsWith("/")) path = path.substring(1);
+                    return new java.io.File(java.net.URLDecoder.decode(path, "UTF-8"));
+                }
+            }
+            return new java.io.File(s);
+        } catch (Throwable t) {
+            try { lion.client.ClientLogger.error("[FakeMod] resolveOurJarFile failed", t); }
+            catch (Throwable ignored) {}
+            return null;
+        }
+    }
+
+    private static java.util.Set<String> scanJarPackages(java.io.File jarFile) {
+        java.util.Set<String> packages = new java.util.HashSet<>();
+        if (jarFile == null || !jarFile.isFile()) return packages;
+        try (java.util.jar.JarFile jar = new java.util.jar.JarFile(jarFile)) {
+            java.util.Enumeration<java.util.jar.JarEntry> entries = jar.entries();
+            while (entries.hasMoreElements()) {
+                String name = entries.nextElement().getName();
+                if (!name.endsWith(".class")) continue;
+                int slash = name.lastIndexOf('/');
+                if (slash <= 0) continue;
+                String pkg = name.substring(0, slash).replace('/', '.');
+                if (pkg.startsWith("com.lionclient") || pkg.startsWith("lion.client")) {
+                    packages.add(pkg);
+                }
+            }
+        } catch (Throwable ignored) {}
+        return packages;
     }
 }

@@ -57,7 +57,6 @@ public final class MCAccess {
             if (mc_getMinecraft == null || mc_theWorld == null || mc_thePlayer == null
                     || mc_getRenderManager == null) {
                 initError = "Minecraft member lookup failed";
-                System.err.println("[MCAccess] " + initError);
                 return false;
             }
 
@@ -110,18 +109,9 @@ public final class MCAccess {
                     new Class<?>[] { String.class });
 
             usable = true;
-            System.out.println("[MCAccess] initialised OK");
-            System.out.println("  Minecraft.getMinecraft = " + nm(mc_getMinecraft));
-            System.out.println("  Minecraft.theWorld     = " + nm(mc_theWorld));
-            System.out.println("  Minecraft.thePlayer    = " + nm(mc_thePlayer));
-            System.out.println("  RenderManager.viewerPosX = " + nm(rm_viewerPosX));
-            System.out.println("  Entity.posX            = " + nm(entity_posX));
-            System.out.println("  World.playerEntities   = " + nm(world_playerEntities));
             return true;
         } catch (Throwable t) {
             initError = "init threw: " + t;
-            System.err.println("[MCAccess] " + initError);
-            t.printStackTrace();
             usable = false;
             return false;
         }
@@ -202,8 +192,7 @@ public final class MCAccess {
         try {
             Object mc = mc();
             if (mc != null) mc_displayGuiScreen.invoke(mc, guiScreen);
-        } catch (Throwable t) {
-            System.err.println("[MCAccess] displayGuiScreen failed: " + t);
+        } catch (Throwable ignored) {
         }
     }
 
@@ -214,7 +203,6 @@ public final class MCAccess {
             if (mc != null) mc_addScheduledTask.invoke(mc, task);
             else task.run();
         } catch (Throwable t) {
-            System.err.println("[MCAccess] runOnClientThread failed: " + t);
             task.run();
         }
     }

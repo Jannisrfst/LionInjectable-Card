@@ -19,25 +19,10 @@ public final class Hooks {
 
     private Hooks() {}
 
-    private static volatile boolean firstTickLogged;
-    private static volatile boolean firstClickMouseOverrideLogged;
-    private static volatile boolean firstGetMouseOverPreLogged;
-    private static volatile boolean firstWalkingUpdatePreLogged;
-    private static volatile boolean firstLivingUpdatePreLogged;
     private static final boolean[] PREV_MOUSE_DOWN = new boolean[16];
     private static int prevMouseWheel;
 
     public static void onMinecraftRunTickStart() {
-        if (!firstTickLogged) {
-            firstTickLogged = true;
-            try {
-                lion.client.ClientLogger.info("[Hooks] FIRST runTick hook fired."
-                        + " Hooks loader=" + Hooks.class.getClassLoader()
-                        + ", MinecraftForge loader=" + MinecraftForge.class.getClassLoader()
-                        + ", EVENT_BUS=" + System.identityHashCode(MinecraftForge.EVENT_BUS));
-            } catch (Throwable ignored) {}
-        }
-
         try { ClientRotationHelper.get().updateServerRotations(); }
         catch (Throwable t) { logOnce("ClientRotationHelper.updateServerRotations", t); }
 
@@ -134,13 +119,6 @@ public final class Hooks {
             com.lionclient.feature.module.impl.KillAuraModule ka =
                     com.lionclient.feature.module.impl.KillAuraModule.getInstance();
             if (ka == null || !ka.isEnabled()) return;
-            if (!firstClickMouseOverrideLogged) {
-                firstClickMouseOverrideLogged = true;
-                lion.client.ClientLogger.info("[Hooks] FIRST clickMouse attack override fired (silent="
-                        + ClientRotationHelper.get().isSilentRotationRequested()
-                        + ", shouldOverride=" + ka.shouldOverrideMouseOver() + ")");
-            }
-
             ClientRotationHelper helper = ClientRotationHelper.get();
             helper.onGetMouseOverPre(mc.thePlayer);
             try {
@@ -157,12 +135,6 @@ public final class Hooks {
                 ClientRotationHelper.get().updateServerRotations();
                 ClientRotationHelper.get().onRunTickStart();
                 ClientRotationHelper.get().onWalkingUpdatePre((net.minecraft.entity.Entity) entity);
-                if (!firstWalkingUpdatePreLogged) {
-                    firstWalkingUpdatePreLogged = true;
-                    lion.client.ClientLogger.info("[Hooks] FIRST onWalkingUpdatePre fired (silent="
-                            + ClientRotationHelper.get().isSilentRotationRequested()
-                            + ", active=" + ClientRotationHelper.get().isActive() + ")");
-                }
             }
         } catch (Throwable t) { logOnce("onWalkingUpdatePre", t); }
     }
@@ -180,12 +152,6 @@ public final class Hooks {
             if (entity instanceof net.minecraft.entity.Entity) {
                 ClientRotationHelper.get().updateServerRotations();
                 ClientRotationHelper.get().onLivingUpdatePre((net.minecraft.entity.Entity) entity);
-                if (!firstLivingUpdatePreLogged) {
-                    firstLivingUpdatePreLogged = true;
-                    lion.client.ClientLogger.info("[Hooks] FIRST onLivingUpdatePre fired (silent="
-                            + ClientRotationHelper.get().isSilentRotationRequested()
-                            + ", active=" + ClientRotationHelper.get().isActive() + ")");
-                }
             }
         } catch (Throwable t) { logOnce("onLivingUpdatePre", t); }
     }
@@ -202,12 +168,6 @@ public final class Hooks {
         try {
             Minecraft mc = Minecraft.getMinecraft();
             if (mc != null && mc.thePlayer != null) {
-                if (!firstGetMouseOverPreLogged) {
-                    firstGetMouseOverPreLogged = true;
-                    lion.client.ClientLogger.info("[Hooks] FIRST getMouseOver Pre hook fired (silent="
-                            + ClientRotationHelper.get().isSilentRotationRequested()
-                            + ", active=" + ClientRotationHelper.get().isActive() + ")");
-                }
                 ClientRotationHelper.get().onGetMouseOverPre(mc.thePlayer);
             }
         } catch (Throwable t) { logOnce("onGetMouseOverPre", t); }
@@ -238,23 +198,7 @@ public final class Hooks {
         } catch (Throwable t) { logOnce("onGetMouseOverPost", t); }
     }
 
-    private static volatile boolean dumpedRGOECtors = false;
-
     public static void onRenderHud(float partialTicks) {
-        if (!dumpedRGOECtors) {
-            dumpedRGOECtors = true;
-            try {
-                StringBuilder sb = new StringBuilder("[Hooks] RGOE constructors: ");
-                for (java.lang.reflect.Constructor<?> c
-                        : RenderGameOverlayEvent.class.getDeclaredConstructors()) {
-                    sb.append(c.toString()).append(" || ");
-                }
-                lion.client.ClientLogger.info(sb.toString());
-                lion.client.ClientLogger.info("[Hooks] RGOE classLoader = "
-                        + RenderGameOverlayEvent.class.getClassLoader());
-            } catch (Throwable ignored) {}
-        }
-
         try {
             ScaledResolution res;
             try { res = new ScaledResolution(Minecraft.getMinecraft()); }
@@ -346,17 +290,9 @@ public final class Hooks {
         m.invoke(er, partialTicks, Integer.valueOf(0));
     }
 
-    private static volatile boolean firstChannelReadLogged;
-
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static boolean onChannelRead0(Object networkManager, Object ctx, Object packet) {
         try {
-            if (!firstChannelReadLogged) {
-                firstChannelReadLogged = true;
-                lion.client.ClientLogger.info("[Hooks] FIRST channelRead0 hook fired (packet="
-                        + (packet == null ? "null" : packet.getClass().getName()) + ")");
-            }
-
             Object listener = resolvePacketListener(networkManager);
             if (!(listener instanceof net.minecraft.client.network.NetHandlerPlayClient)) {
                 return false;
@@ -403,19 +339,12 @@ public final class Hooks {
         return false;
     }
 
-    private static volatile boolean firstUpdatePlayerMoveStateLogged;
-
     public static void onUpdatePlayerMoveState(Object inputObj) {
         try {
             if (!(inputObj instanceof net.minecraft.util.MovementInput)) {
                 return;
             }
             net.minecraft.util.MovementInput input = (net.minecraft.util.MovementInput) inputObj;
-
-            if (!firstUpdatePlayerMoveStateLogged) {
-                firstUpdatePlayerMoveStateLogged = true;
-                lion.client.ClientLogger.info("[Hooks] FIRST updatePlayerMoveState hook fired");
-            }
 
             com.lionclient.event.PrePlayerInputEvent event =
                     new com.lionclient.event.PrePlayerInputEvent(
@@ -430,18 +359,10 @@ public final class Hooks {
         }
     }
 
-    private static volatile boolean firstSendPacketLogged;
-
     public static boolean onSendPacket(Object networkManager, Object packet) {
         try {
             if (!(packet instanceof net.minecraft.network.Packet)) {
                 return false;
-            }
-
-            if (!firstSendPacketLogged) {
-                firstSendPacketLogged = true;
-                lion.client.ClientLogger.info("[Hooks] FIRST sendPacket hook fired (packet="
-                        + packet.getClass().getName() + ")");
             }
 
             com.lionclient.event.SendPacketEvent event =
@@ -473,6 +394,6 @@ public final class Hooks {
     private static void logOnce(String where, Throwable t) {
         if (!LOGGED.add(where)) return;
         try { lion.client.ClientLogger.error("[Hooks] " + where + " threw", t); }
-        catch (Throwable ignored) { System.err.println("[Hooks] " + where + ": " + t); }
+        catch (Throwable ignored) {}
     }
 }

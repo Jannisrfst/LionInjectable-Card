@@ -77,14 +77,6 @@ public final class LionTransformer implements ClassFileTransformer {
         addHookLookup(hookSigs, mapping, MOVEMENT_INPUT_FROM_OPTIONS_INT, "updatePlayerMoveState", "()V");
         NOTCH_METHOD_NAMES = Collections.unmodifiableMap(hookSigs);
 
-        lion.client.ClientLogger.info("[LionTransformer] vanilla mappings wired: "
-                + notchToMcp.size() + " classes, " + hookSigs.size() + " hook methods");
-        for (Map.Entry<String, String> e : notchToMcp.entrySet()) {
-            lion.client.ClientLogger.info("  " + e.getValue() + " <- " + e.getKey());
-        }
-        for (Map.Entry<String, String> e : hookSigs.entrySet()) {
-            lion.client.ClientLogger.info("  hook " + e.getKey() + " -> " + e.getValue());
-        }
     }
 
     private static void addHookLookup(Map<String, String> out, NotchMapping mapping,
@@ -99,8 +91,6 @@ public final class LionTransformer implements ClassFileTransformer {
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
         if (className == null || !TARGET_NAMES_INTERNAL.contains(className)) return null;
         try {
-            lion.client.ClientLogger.info("[LionTransformer] transform() entered for " + className
-                    + " (loader=" + loader + ", buf=" + (classfileBuffer != null ? classfileBuffer.length : -1) + ")");
             ClassReader reader = new ClassReader(classfileBuffer);
             ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES) {
                 @Override
@@ -115,10 +105,7 @@ public final class LionTransformer implements ClassFileTransformer {
             };
             ClassVisitor visitor = chooseVisitor(className, writer);
             reader.accept(visitor, ClassReader.SKIP_FRAMES);
-            byte[] out = writer.toByteArray();
-            lion.client.ClientLogger.info("[LionTransformer] transformed " + className
-                    + " (" + classfileBuffer.length + " -> " + out.length + " bytes)");
-            return out;
+            return writer.toByteArray();
         } catch (Throwable t) {
             lion.client.ClientLogger.error("[LionTransformer] " + className + " transform threw", t);
             return null;
@@ -149,13 +136,10 @@ public final class LionTransformer implements ClassFileTransformer {
         @Override
         public MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] ex) {
             MethodVisitor mv = super.visitMethod(access, name, desc, sig, ex);
-            lion.client.ClientLogger.trace("[LionTransformer.Minecraft] visit " + name + desc);
             if (!ON_FORGE && nameMatches(name, MINECRAFT_INT, "runTick", "func_71407_l", desc) && "()V".equals(desc)) {
-                lion.client.ClientLogger.info("[LionTransformer.Minecraft] MATCHED runTick — injecting hooks");
                 return new RunTickMV(mv);
             }
             if (nameMatches(name, MINECRAFT_INT, "clickMouse", "func_147116_af", desc) && "()V".equals(desc)) {
-                lion.client.ClientLogger.info("[LionTransformer.Minecraft] MATCHED clickMouse — injecting hooks (onForge=" + ON_FORGE + ")");
                 MethodVisitor visitor = new InvokeStaticHeadMV(mv, "onClickMouseAttackOverride");
                 if (!ON_FORGE) {
                     visitor = new InvokeStaticHeadMV(visitor, "onClickMouse");
@@ -163,7 +147,6 @@ public final class LionTransformer implements ClassFileTransformer {
                 return visitor;
             }
             if (!ON_FORGE && nameMatches(name, MINECRAFT_INT, "rightClickMouse", "func_147121_ag", desc) && "()V".equals(desc)) {
-                lion.client.ClientLogger.info("[LionTransformer.Minecraft] MATCHED rightClickMouse — injecting hooks");
                 return new InvokeStaticHeadMV(mv, "onRightClickMouse");
             }
             return mv;
@@ -175,13 +158,10 @@ public final class LionTransformer implements ClassFileTransformer {
         @Override
         public MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] ex) {
             MethodVisitor mv = super.visitMethod(access, name, desc, sig, ex);
-            lion.client.ClientLogger.trace("[LionTransformer.EntityPlayerSP] visit " + name + desc);
             if (nameMatches(name, ENTITY_PLAYER_SP_INT, "onUpdateWalkingPlayer", "func_175161_p", desc) && "()V".equals(desc)) {
-                lion.client.ClientLogger.info("[LionTransformer.EntityPlayerSP] MATCHED onUpdateWalkingPlayer");
                 return new SwapAroundMV(mv, "onWalkingUpdatePre", "onWalkingUpdatePost");
             }
             if (nameMatches(name, ENTITY_PLAYER_SP_INT, "onLivingUpdate", "func_70636_d", desc) && "()V".equals(desc)) {
-                lion.client.ClientLogger.info("[LionTransformer.EntityPlayerSP] MATCHED onLivingUpdate");
                 return new SwapAroundMV(mv, "onLivingUpdatePre", "onLivingUpdatePost");
             }
             return mv;
@@ -248,13 +228,10 @@ public final class LionTransformer implements ClassFileTransformer {
         @Override
         public MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] ex) {
             MethodVisitor mv = super.visitMethod(access, name, desc, sig, ex);
-            lion.client.ClientLogger.trace("[LionTransformer.EntityRenderer] visit " + name + desc);
             if (!ON_FORGE && nameMatches(name, ENTITY_RENDERER_INT, "renderWorldPass", "func_175068_a", desc) && "(IFJ)V".equals(desc)) {
-                lion.client.ClientLogger.info("[LionTransformer.EntityRenderer] MATCHED renderWorldPass(IFJ)V");
                 return new RenderWorldMV(mv,  2);
             }
             if (nameMatches(name, ENTITY_RENDERER_INT, "getMouseOver", "func_78473_a", desc) && "(F)V".equals(desc)) {
-                lion.client.ClientLogger.info("[LionTransformer.EntityRenderer] MATCHED getMouseOver(F)V");
                 return new GetMouseOverMV(mv);
             }
             return mv;
@@ -301,9 +278,7 @@ public final class LionTransformer implements ClassFileTransformer {
         @Override
         public MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] ex) {
             MethodVisitor mv = super.visitMethod(access, name, desc, sig, ex);
-            lion.client.ClientLogger.trace("[LionTransformer.GuiIngame] visit " + name + desc);
             if (!ON_FORGE && nameMatches(name, GUI_INGAME_INT, "renderGameOverlay", "func_175180_a", desc) && "(F)V".equals(desc)) {
-                lion.client.ClientLogger.info("[LionTransformer.GuiIngame] MATCHED renderGameOverlay(F)V");
                 return new RenderOverlayMV(mv);
             }
             return mv;
@@ -327,15 +302,12 @@ public final class LionTransformer implements ClassFileTransformer {
         @Override
         public MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] ex) {
             MethodVisitor mv = super.visitMethod(access, name, desc, sig, ex);
-            lion.client.ClientLogger.trace("[LionTransformer.NetworkManager] visit " + name + desc);
             if ("channelRead0".equals(name)
                     && "(Lio/netty/channel/ChannelHandlerContext;Lnet/minecraft/network/Packet;)V".equals(desc)) {
-                lion.client.ClientLogger.info("[LionTransformer.NetworkManager] MATCHED channelRead0 — injecting inbound packet hook");
                 return new ChannelRead0MV(mv);
             }
             if (nameMatches(name, NETWORK_MANAGER_INT, "sendPacket", "func_179290_a", desc)
                     && "(Lnet/minecraft/network/Packet;)V".equals(desc)) {
-                lion.client.ClientLogger.info("[LionTransformer.NetworkManager] MATCHED sendPacket — injecting outbound packet hook");
                 return new SendPacketMV(mv);
             }
             return mv;
@@ -380,10 +352,8 @@ public final class LionTransformer implements ClassFileTransformer {
         @Override
         public MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] ex) {
             MethodVisitor mv = super.visitMethod(access, name, desc, sig, ex);
-            lion.client.ClientLogger.trace("[LionTransformer.MovementInputFromOptions] visit " + name + desc);
             if (nameMatches(name, MOVEMENT_INPUT_FROM_OPTIONS_INT, "updatePlayerMoveState", "func_78898_a", desc)
                     && "()V".equals(desc)) {
-                lion.client.ClientLogger.info("[LionTransformer.MovementInputFromOptions] MATCHED updatePlayerMoveState — injecting PrePlayerInputEvent post");
                 return new UpdatePlayerMoveStateMV(mv);
             }
             return mv;

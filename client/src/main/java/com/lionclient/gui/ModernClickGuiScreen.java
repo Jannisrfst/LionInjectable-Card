@@ -141,24 +141,10 @@ public final class ModernClickGuiScreen extends GuiScreen {
         }
     }
 
-    private static volatile boolean firstDrawLogged;
-    private static volatile boolean drawErrorLogged;
-
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        if (!firstDrawLogged) {
-            firstDrawLogged = true;
-            try { lion.client.ClientLogger.info("[ModernClickGUI] FIRST drawScreen mouse=(" + mouseX + "," + mouseY + ") w=" + width + " h=" + height); }
-            catch (Throwable ignored) {}
-        }
         try { drawScreenImpl(mouseX, mouseY, partialTicks); }
-        catch (Throwable t) {
-            if (!drawErrorLogged) {
-                drawErrorLogged = true;
-                try { lion.client.ClientLogger.error("[ModernClickGUI] drawScreen threw", t); }
-                catch (Throwable ignored) {}
-            }
-        }
+        catch (Throwable ignored) {}
     }
 
     private void drawScreenImpl(int mouseX, int mouseY, float partialTicks) {

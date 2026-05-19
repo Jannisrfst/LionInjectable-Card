@@ -1,8 +1,7 @@
 package com.lionclient.combat;
 
 import com.lionclient.event.ClientRotationEvent;
-import com.lionclient.event.JumpEvent;
-import com.lionclient.event.StrafeEvent;
+import com.lionclient.event.PrePlayerInputEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.MathHelper;
@@ -20,6 +19,7 @@ public final class ClientRotationHelper {
     private boolean rotationsUpdatedThisTick;
 
     private boolean silentRotation;
+    private boolean silentMoveFix;
     private float savedYaw;
     private float savedPitch;
     private float savedPrevYaw;
@@ -86,11 +86,20 @@ public final class ClientRotationHelper {
         serverPitch = null;
         setRotations = false;
         silentRotation = false;
+        silentMoveFix = false;
         rotationsUpdatedThisTick = false;
         swappedForMouseOver = false;
         swappedForWalkingUpdate = false;
         swappedForLivingUpdate = false;
         prePlayerInteractPosted = false;
+    }
+
+    public void requestSilentMoveFix() {
+        silentMoveFix = true;
+    }
+
+    public boolean isSilentMoveFixRequested() {
+        return silentMoveFix;
     }
 
     public void applyTickSwap(Entity entity) {
@@ -323,22 +332,24 @@ public final class ClientRotationHelper {
         swappedForWalkingUpdate = false;
     }
 
-    public void fixMovementInputs() {
-        if (minecraft.thePlayer == null || minecraft.thePlayer.movementInput == null || !canFixMovement()) {
+    @SubscribeEvent
+    public void onPlayerInput(PrePlayerInputEvent event) {
+        if (!silentMoveFix || !canFixMovement()) {
             return;
         }
 
-        float forward = minecraft.thePlayer.movementInput.moveForward;
-        float strafe = minecraft.thePlayer.movementInput.moveStrafe;
+        float forward = event.getForward();
+        float strafe = event.getStrafe();
         if (forward == 0.0F && strafe == 0.0F) {
             return;
         }
 
-        float sneakMultiplier = minecraft.thePlayer.movementInput.sneak ? 0.3F : 1.0F;
-        double angle = MathHelper.wrapAngleTo180_double(Math.toDegrees(getDirection(minecraft.thePlayer.rotationYaw, forward, strafe)));
-        float closestForward = 0.0F;
-        float closestStrafe = 0.0F;
-        float closestDifference = Float.MAX_VALUE;
+        float visualYaw = resolveVisualYaw();
+        float sneakMultiplier = event.isSneak() ? 0.3F : 1.0F;
+        double intendedAngle = Math.toDegrees(getDirection(visualYaw, forward, strafe));
+        float closestForward = forward;
+        float closestStrafe = strafe;
+        double closestDifference = Double.MAX_VALUE;
 
         for (float predictedForwardRaw = -1.0F; predictedForwardRaw <= 1.0F; predictedForwardRaw += 1.0F) {
             for (float predictedStrafeRaw = -1.0F; predictedStrafeRaw <= 1.0F; predictedStrafeRaw += 1.0F) {
@@ -348,32 +359,31 @@ public final class ClientRotationHelper {
 
                 float predictedForward = predictedForwardRaw * sneakMultiplier;
                 float predictedStrafe = predictedStrafeRaw * sneakMultiplier;
-                double predictedAngle = MathHelper.wrapAngleTo180_double(Math.toDegrees(getDirection(serverYaw.floatValue(), predictedForward, predictedStrafe)));
-                double difference = Math.abs(angle - predictedAngle);
+                double predictedAngle = Math.toDegrees(getDirection(serverYaw.floatValue(), predictedForward, predictedStrafe));
+                double difference = Math.abs(MathHelper.wrapAngleTo180_double(intendedAngle - predictedAngle));
                 if (difference < closestDifference) {
-                    closestDifference = (float) difference;
+                    closestDifference = difference;
                     closestForward = predictedForward;
                     closestStrafe = predictedStrafe;
                 }
             }
         }
 
-        minecraft.thePlayer.movementInput.moveForward = closestForward;
-        minecraft.thePlayer.movementInput.moveStrafe = closestStrafe;
+        event.setForward(closestForward);
+        event.setStrafe(closestStrafe);
     }
 
-    @SubscribeEvent
-    public void onStrafe(StrafeEvent event) {
-        if (canFixMovement()) {
-            event.setYaw(serverYaw.floatValue());
+    private float resolveVisualYaw() {
+        if (swappedForTickSwap) {
+            return savedYawForTickSwap;
         }
-    }
-
-    @SubscribeEvent
-    public void onJump(JumpEvent event) {
-        if (canFixMovement()) {
-            event.setYaw(serverYaw.floatValue());
+        if (swappedForLivingUpdate) {
+            return savedYawForLiving;
         }
+        if (swappedForWalkingUpdate) {
+            return savedYaw;
+        }
+        return minecraft.thePlayer != null ? minecraft.thePlayer.rotationYaw : 0.0F;
     }
 
     private boolean canFixMovement() {

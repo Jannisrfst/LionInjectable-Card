@@ -35,11 +35,6 @@ public final class LionVanillaTransformer implements ClassFileTransformer {
         if (m == null) {
             ClientLogger.error("[LionVanilla] " + MAPPING_RESOURCE
                     + " not on classpath — vanilla remap disabled", null);
-        } else {
-            ClientLogger.info("[LionVanilla] loaded MCP->Notch mappings: "
-                    + m.classToNotch.size() + " classes, "
-                    + m.methodToNotch.size() + " methods, "
-                    + m.fieldToNotch.size() + " fields");
         }
     }
 
@@ -101,34 +96,13 @@ public final class LionVanillaTransformer implements ClassFileTransformer {
                                                  String sig, String[] exceptions) {
                     String renamed = methodOverrides.get(name + " " + desc);
                     if (renamed != null) {
-                        ClientLogger.info("[LionVanilla] override-rename " + className.replace('/', '.')
-                                + "." + name + desc + " -> " + renamed);
                         return super.visitMethod(access, renamed, desc, sig, exceptions);
                     }
                     return super.visitMethod(access, name, desc, sig, exceptions);
                 }
             };
             reader.accept(cr, 0);
-            byte[] out = writer.toByteArray();
-            int overrideCount = methodOverrides.size() + fieldOverrides.size();
-            ClientLogger.info("[LionVanilla] remapped " + className.replace('/', '.')
-                    + " (" + classfileBuffer.length + " -> " + out.length + " bytes"
-                    + (overrideCount == 0 ? ")"
-                        : ", " + methodOverrides.size() + " method + "
-                          + fieldOverrides.size() + " field overrides)"));
-            try {
-                if (className.equals("net/minecraftforge/client/event/RenderGameOverlayEvent")
-                        || className.equals("com/lionclient/gui/ModernClickGuiScreen")) {
-                    String tmp = System.getenv("TEMP");
-                    if (tmp == null) tmp = System.getProperty("java.io.tmpdir");
-                    java.io.File dir = new java.io.File(tmp, "LionInjector/remapped-dump");
-                    dir.mkdirs();
-                    java.io.File f = new java.io.File(dir, className.replace('/', '_') + ".class");
-                    java.nio.file.Files.write(f.toPath(), out);
-                    ClientLogger.info("[LionVanilla] DEBUG: dumped remapped class to " + f.getAbsolutePath());
-                }
-            } catch (Throwable ignored) {}
-            return out;
+            return writer.toByteArray();
         } catch (Throwable t) {
             ClientLogger.error("[LionVanilla] remap of " + className + " threw", t);
             return null;

@@ -26,37 +26,18 @@ public final class LionAgent {
     public static void agentmain(String args, Instrumentation inst) { attach(args, inst); }
 
     private static synchronized void attach(String args, Instrumentation inst) {
-        if (attached) {
-            ClientLogger.info("[LionAgent] already attached — ignoring re-attach (" + args + ")");
-            return;
-        }
+        if (attached) return;
         attached = true;
         INSTR    = inst;
-
-        ClientLogger.info("[LionAgent] attached (args=" + args
-                + ", canRetransform=" + inst.isRetransformClassesSupported()
-                + ", canRedefine=" + inst.isRedefineClassesSupported() + ")");
 
         boolean onForge = false;
         boolean onBadlion = false;
         ClassLoader mcCl = null;
         ClassLoader mainCl = null;
-        int totalCount = 0;
-        int mcNamespaceCount = 0;
-        java.util.List<String> mcSamples = new java.util.ArrayList<>();
         try {
             for (Class<?> c : inst.getAllLoadedClasses()) {
-                totalCount++;
                 if (c == null) continue;
                 String n = c.getName();
-                if (n.startsWith("net.minecraft.")) {
-                    mcNamespaceCount++;
-                    if (mcSamples.size() < 20) {
-                        ClassLoader cl = c.getClassLoader();
-                        mcSamples.add(n + " [loader=" + (cl == null ? "boot"
-                                : cl.getClass().getSimpleName() + "@" + Integer.toHexString(System.identityHashCode(cl))) + "]");
-                    }
-                }
                 if (mcCl == null && "net.minecraft.client.Minecraft".equals(n)) {
                     mcCl = c.getClassLoader();
                 }
@@ -75,28 +56,16 @@ public final class LionAgent {
             ClientLogger.error("[LionAgent] loaded-class scan failed", t);
         }
 
-        ClientLogger.info("[LionAgent] scanned " + totalCount + " loaded classes, "
-                + mcNamespaceCount + " in net.minecraft.* namespace");
-        if (!mcSamples.isEmpty()) {
-            ClientLogger.info("[LionAgent] net.minecraft.* samples:");
-            for (String s : mcSamples) ClientLogger.info("    " + s);
-        }
-
         boolean launchwrapperDetected = false;
         try {
             Class<?> launchCls = Class.forName("net.minecraft.launchwrapper.Launch");
             java.lang.reflect.Field clField = launchCls.getField("classLoader");
             Object lcl = clField.get(null);
-            ClientLogger.info("[LionAgent] launchwrapper probe: Launch.classLoader = "
-                    + (lcl == null ? "null" : lcl.getClass().getName() + "@" + Integer.toHexString(System.identityHashCode(lcl))));
             if (lcl instanceof ClassLoader) {
                 mcCl = (ClassLoader) lcl;
                 launchwrapperDetected = true;
-                ClientLogger.info("[LionAgent] launchwrapper detected — using "
-                        + mcCl.getClass().getName() + " as MC loader (skipping vanilla notch path).");
             }
-        } catch (Throwable t) {
-            ClientLogger.info("[LionAgent] launchwrapper probe failed: " + t.getClass().getName() + ": " + t.getMessage());
+        } catch (Throwable ignored) {
         }
 
         if (!launchwrapperDetected) {
@@ -109,21 +78,14 @@ public final class LionAgent {
                     if (clName.endsWith(".LaunchClassLoader") || clName.endsWith("$LaunchClassLoader")) {
                         mcCl = cl;
                         launchwrapperDetected = true;
-                        ClientLogger.info("[LionAgent] launchwrapper detected via loaded-class scan — using "
-                                + clName + " (holds " + c.getName() + ") as MC loader.");
                         break;
                     }
                 }
-            } catch (Throwable t) {
-                ClientLogger.info("[LionAgent] LaunchClassLoader scan failed: " + t);
+            } catch (Throwable ignored) {
             }
         }
 
         if (!launchwrapperDetected && mcCl == null && mainCl != null) {
-            ClientLogger.warn("[LionAgent] net.minecraft.client.Minecraft is NOT loaded under that name. "
-                    + "Main is, so the JVM IS running Minecraft — but the rest of MC is Notch-obfuscated "
-                    + "(short names like 'bao', 'ave'). Installing LionVanillaTransformer to rewrite our "
-                    + "MCP-named bytecode to notch at load time so LionClient binds to the running MC.");
             mcCl = mainCl;
             IS_VANILLA = true;
         }
@@ -139,7 +101,6 @@ public final class LionAgent {
                 try {
                     Class.forName(name, false, mcCl);
                     onBadlion = true;
-                    ClientLogger.info("[LionAgent] Badlion detected via Class.forName probe on mcCl: " + name);
                     break;
                 } catch (Throwable ignored) {}
             }
@@ -147,10 +108,7 @@ public final class LionAgent {
         if (!onBadlion) {
             try {
                 String v = System.getProperty("badlion.version");
-                if (v != null) {
-                    onBadlion = true;
-                    ClientLogger.info("[LionAgent] Badlion detected via badlion.version sysprop = " + v);
-                }
+                if (v != null) onBadlion = true;
             } catch (Throwable ignored) {}
         }
         if (!onBadlion && mcCl instanceof java.net.URLClassLoader) {
@@ -162,7 +120,6 @@ public final class LionAgent {
                         String s = u.toString().toLowerCase(java.util.Locale.ROOT);
                         if (s.contains("badlion") || s.contains("blclient")) {
                             onBadlion = true;
-                            ClientLogger.info("[LionAgent] Badlion detected via mcCl URL list: " + u);
                             break;
                         }
                     }
@@ -171,20 +128,11 @@ public final class LionAgent {
         }
 
         if (onBadlion && onForge) {
-            ClientLogger.info("[LionAgent] Badlion detected alongside Forge classes — forcing ON_FORGE=false. "
-                    + "Badlion ships Forge stubs but does not run Forge's native event dispatch; "
-                    + "treating like Lunar so runTick injection fires and the tick-wide rotation swap pipeline runs.");
             onForge = false;
         }
 
         MC_CLASSLOADER = mcCl;
         LionTransformer.ON_FORGE = onForge;
-        ClientLogger.info("[LionAgent] MC_CLASSLOADER = "
-                + (mcCl == null ? "null"
-                        : mcCl.getClass().getName() + "@" + Integer.toHexString(System.identityHashCode(mcCl))));
-        ClientLogger.info("[LionAgent] detected onForge=" + onForge + ", onBadlion=" + onBadlion
-                + ", isVanilla=" + IS_VANILLA
-                + " (LionTransformer.class loader=" + LionTransformer.class.getClassLoader() + ")");
 
         if (IS_VANILLA) {
             try {
@@ -194,7 +142,6 @@ public final class LionAgent {
                     inst.addTransformer(vt, true);
                     NOTCH_MAPPING = vt.getMapping();
                     LionTransformer.setVanillaMappings(NOTCH_MAPPING);
-                    ClientLogger.info("[LionAgent] LionVanillaTransformer installed.");
                 } else {
                     ClientLogger.error("[LionAgent] LionVanillaTransformer mapping unavailable; "
                             + "vanilla bootstrap will fail.", null);
@@ -211,10 +158,7 @@ public final class LionAgent {
             ClientLogger.warn("[LionAgent] installTransformerAndRetransform called before attach");
             return;
         }
-        if (transformerInstalled) {
-            ClientLogger.info("[LionAgent] transformer already installed");
-            return;
-        }
+        if (transformerInstalled) return;
         transformerInstalled = true;
 
         if (IS_VANILLA && NOTCH_MAPPING != null) {
@@ -227,42 +171,34 @@ public final class LionAgent {
 
         try {
             inst.addTransformer(new LionTransformer(), true);
-            ClientLogger.info("[LionAgent] transformer registered.");
         } catch (Throwable t) {
             ClientLogger.error("[LionAgent] addTransformer failed", t);
             return;
         }
 
-        if (!inst.isRetransformClassesSupported()) {
-            ClientLogger.warn("[LionAgent] retransform not supported — hooks only fire on FUTURE class loads.");
-            return;
-        }
+        if (!inst.isRetransformClassesSupported()) return;
 
         for (Class<?> c : inst.getAllLoadedClasses()) {
             if (c == null) continue;
             if (!LionTransformer.TARGET_NAMES_DOTTED.contains(c.getName())) continue;
             try {
                 inst.retransformClasses(c);
-                ClientLogger.info("[LionAgent] retransformed " + c.getName());
             } catch (Throwable t) {
                 ClientLogger.error("[LionAgent] retransform " + c.getName() + " failed", t);
             }
         }
 
-        if (IS_VANILLA && VANILLA_TRANSFORMER != null && inst.isRetransformClassesSupported()) {
-            int retransformed = 0;
+        if (IS_VANILLA && VANILLA_TRANSFORMER != null) {
             for (Class<?> c : inst.getAllLoadedClasses()) {
                 if (c == null) continue;
                 String n = c.getName();
                 if (!n.startsWith("net.minecraftforge.") && !n.startsWith("com.lionclient.")) continue;
                 try {
                     inst.retransformClasses(c);
-                    retransformed++;
                 } catch (Throwable t) {
                     ClientLogger.error("[LionAgent] vanilla catch-up retransform " + n + " failed", t);
                 }
             }
-            ClientLogger.info("[LionAgent] vanilla catch-up retransformed " + retransformed + " forge-shim/lionclient classes");
         }
     }
 

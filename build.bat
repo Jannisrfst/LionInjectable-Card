@@ -75,6 +75,15 @@ echo === [3/3] Building injector (CMake + cl) ==================================
 if not exist "%ROOT%build" mkdir "%ROOT%build"
 pushd "%ROOT%build"
 
+rem Delete stale CMake cache so a toolchain change doesn't cause conflicts.
+if exist CMakeCache.txt del /q CMakeCache.txt
+
+rem Prepend the MSVC x64 tool dir so MSVC's link.exe is found before any
+rem MinGW ld.exe that may be on PATH from WinLibs / WinGet installs.
+if defined VCToolsInstallDir (
+    set "PATH=%VCToolsInstallDir%bin\Hostx64\x64;%PATH%"
+)
+
 rem We are inside a vcvars x64 prompt, so cl/link/nmake are on PATH. Prefer
 rem Ninja if available (faster, parallel), otherwise fall back to NMake.
 where ninja >nul 2>&1
@@ -88,6 +97,7 @@ echo Using compiler:
 where cl
 cmake -G "%CMAKE_GEN%" -DCMAKE_BUILD_TYPE=Release ^
       -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl ^
+      -DCMAKE_LINKER=link.exe ^
       "%ROOT%injector" || (popd & goto :fail)
 cmake --build . || (popd & goto :fail)
 popd

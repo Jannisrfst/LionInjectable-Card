@@ -1,13 +1,13 @@
 # ninja log v7
-41	519	8006559046146114	CMakeFiles/LionInjectable.dir/src/main.cpp.obj	1fba26f54a987639
-34	1225	8006559046083188	CMakeFiles/payload.dir/payload/src/agent_attach.cpp.obj	de8685388e08b7ab
-9	1407	8006572456633587	CMakeFiles/payload.dir/payload/src/dllmain.cpp.obj	5f2eed07d8a71967
-24	1620	8006559045984545	CMakeFiles/payload.dir/payload/src/native_bridge.cpp.obj	4c1b829baa21e115
-17	1553	8006572456716265	CMakeFiles/payload.dir/payload/src/jvm_loader.cpp.obj	c651153fe6021cc3
-35	1885	8006572456890213	CMakeFiles/LionInjectable.dir/src/logger.cpp.obj	8e1139ac60229b5a
-1553	1878	8006572472064711	payload.dll	b976d4aeda2433b4
-1553	1878	8006572472064711	payload.lib	b976d4aeda2433b4
-55	2412	8006559046296739	CMakeFiles/LionInjectable.dir/src/injector.cpp.obj	bed8d5e00fd80dc9
-72	2494	8006559046461465	CMakeFiles/LionInjectable.dir/src/process_scanner.cpp.obj	f1c70eb3b7934489
-12	2337	8006642094226641	CMakeFiles/LionInjectable.dir/src/gui.cpp.obj	aea41e32550a570e
-2337	2671	8006642117476137	LionInjectable.exe	7b0be016179a1bb0
+29	451	8008200853158107	CMakeFiles/LionInjectable.dir/src/main.cpp.obj	1fba26f54a987639
+23	1034	8008200853102938	CMakeFiles/payload.dir/payload/src/agent_attach.cpp.obj	de8685388e08b7ab
+7	1126	8008200852942577	CMakeFiles/payload.dir/payload/src/dllmain.cpp.obj	5f2eed07d8a71967
+18	1151	8008200853047813	CMakeFiles/payload.dir/payload/src/native_bridge.cpp.obj	4c1b829baa21e115
+12	1250	8008200853002697	CMakeFiles/payload.dir/payload/src/jvm_loader.cpp.obj	c651153fe6021cc3
+46	1516	8008200853333668	CMakeFiles/LionInjectable.dir/src/logger.cpp.obj	8e1139ac60229b5a
+1250	1549	8008200865382484	payload.dll	b976d4aeda2433b4
+1250	1549	8008200865382484	payload.lib	b976d4aeda2433b4
+40	1715	8008200853279387	CMakeFiles/LionInjectable.dir/src/injector.cpp.obj	bed8d5e00fd80dc9
+52	1713	8008200853395395	CMakeFiles/LionInjectable.dir/src/process_scanner.cpp.obj	f1c70eb3b7934489
+35	1973	8008200853224234	CMakeFiles/LionInjectable.dir/src/gui.cpp.obj	aea41e32550a570e
+1973	2234	8008200872601646	LionInjectable.exe	7b0be016179a1bb0

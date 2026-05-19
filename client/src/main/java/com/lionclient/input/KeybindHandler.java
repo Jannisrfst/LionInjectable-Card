@@ -12,8 +12,6 @@ import org.lwjgl.input.Keyboard;
 
 public final class KeybindHandler {
 
-    private static volatile boolean firstTickLogged;
-
     private final ModuleManager moduleManager;
     private final boolean[]     prevDown = new boolean[Keyboard.KEYBOARD_SIZE];
 
@@ -25,20 +23,10 @@ public final class KeybindHandler {
         net.minecraftforge.fml.common.eventhandler.EventBus bus =
                 FMLCommonHandler.instance().bus();
         bus.register(new KeybindHandler(moduleManager));
-        try {
-            com.lionclient.LionClient.class.getClassLoader();
-            lion.client.ClientLogger.info("[KeybindHandler] registered on bus="
-                    + System.identityHashCode(bus) + " (" + bus.getClass().getName() + ")");
-        } catch (Throwable ignored) {}
     }
 
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
-        if (!firstTickLogged) {
-            firstTickLogged = true;
-            try { lion.client.ClientLogger.info("[KeybindHandler] FIRST tick received (phase=" + event.phase + ")"); }
-            catch (Throwable ignored) {}
-        }
         if (event.phase != TickEvent.Phase.END) return;
 
         Minecraft mc = Minecraft.getMinecraft();
