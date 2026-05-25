@@ -55,10 +55,13 @@ public final class AntiFireballModule extends Module {
     private EntityFireball fireball;
     private long nextClickTime;
     private boolean forgeRegistered;
+    private final boolean badlion;
 
     public AntiFireballModule() {
         super("AntiFireball", "Automatically aims at and hits nearby fireballs.", Category.PLAYER, Keyboard.KEY_NONE);
         instance = this;
+        badlion = lion.client.hook.LauncherDetection.detect().kind
+                == lion.client.hook.LauncherDetection.Kind.BADLION;
         addSetting(fov);
         addSetting(range);
         addSetting(targetCps);
@@ -66,7 +69,17 @@ public final class AntiFireballModule extends Module {
         addSetting(onGround);
         addSetting(sneakWhileActive);
         addSetting(silentAim);
+        silentAim.setVisibility(new java.util.function.BooleanSupplier() {
+            @Override
+            public boolean getAsBoolean() {
+                return !badlion;
+            }
+        });
         pointedEntityField = findRendererField("field_78528_u", "pointedEntity");
+    }
+
+    private boolean silentAimActive() {
+        return !badlion && silentAim.isEnabled();
     }
 
     @Override
@@ -130,7 +143,7 @@ public final class AntiFireballModule extends Module {
         );
         event.yaw = Float.valueOf(smooth[0]);
         event.pitch = Float.valueOf(smooth[1]);
-        if (silentAim.isEnabled()) {
+        if (silentAimActive()) {
             event.silent = true;
         }
     }

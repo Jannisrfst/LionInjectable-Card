@@ -7,6 +7,7 @@ import com.lionclient.feature.module.impl.AutoClickerModule;
 import com.lionclient.feature.module.impl.AntiBotModule;
 import com.lionclient.feature.module.impl.AntiFireballModule;
 import com.lionclient.feature.module.impl.BedPlatesModule;
+import com.lionclient.feature.module.impl.ChamsModule;
 import com.lionclient.feature.module.impl.ClickGuiModule;
 import com.lionclient.feature.module.impl.ClickRecorderModule;
 import com.lionclient.feature.module.impl.ConfigModule;
@@ -65,6 +66,7 @@ public final class ModuleManager {
         register(new ClickRecorderModule());
         register(new ClickGuiModule());
         register(new PlayerEspModule());
+        register(new ChamsModule());
         register(new NametagsModule());
         register(new HudModule());
         register(new TrajectoriesModule());

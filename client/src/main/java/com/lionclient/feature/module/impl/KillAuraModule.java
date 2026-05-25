@@ -69,10 +69,13 @@ public final class KillAuraModule extends Module {
     private double targetDistance = Double.MAX_VALUE;
     private long nextClickTime;
     private boolean forgeRegistered;
+    private final boolean badlion;
 
     public KillAuraModule() {
         super("KillAura", "Automatically attacks enemies.", Category.COMBAT, Keyboard.KEY_NONE);
         instance = this;
+        badlion = lion.client.hook.LauncherDetection.detect().kind
+                == lion.client.hook.LauncherDetection.Kind.BADLION;
         addSetting(targetCps);
         addSetting(attackRange);
         addSetting(swingRange);
@@ -88,13 +91,24 @@ public final class KillAuraModule extends Module {
         addSetting(weaponOnly);
         addSetting(silentAim);
         addSetting(moveFix);
+        java.util.function.BooleanSupplier notBadlion = new java.util.function.BooleanSupplier() {
+            @Override
+            public boolean getAsBoolean() {
+                return !badlion;
+            }
+        };
+        silentAim.setVisibility(notBadlion);
         moveFix.setVisibility(new java.util.function.BooleanSupplier() {
             @Override
             public boolean getAsBoolean() {
-                return silentAim.isEnabled();
+                return !badlion && silentAim.isEnabled();
             }
         });
         pointedEntityField = findRendererField("field_78528_u", "pointedEntity");
+    }
+
+    private boolean silentAimActive() {
+        return !badlion && silentAim.isEnabled();
     }
 
     @Override
@@ -153,7 +167,7 @@ public final class KillAuraModule extends Module {
         float[] smooth = KillAuraRotationUtils.smoothRotation(baseYaw, basePitch, rotations[0], rotations[1], SILENT_ROTATION_SPEED, 0.0F);
         event.yaw = Float.valueOf(smooth[0]);
         event.pitch = Float.valueOf(smooth[1]);
-        if (silentAim.isEnabled()) {
+        if (silentAimActive()) {
             event.silent = true;
             if (moveFix.getValue() == MoveFix.SILENT) {
                 ClientRotationHelper.get().requestSilentMoveFix();
@@ -203,7 +217,7 @@ public final class KillAuraModule extends Module {
         }
 
         for (int i = 0; i < clicks; i++) {
-            if (silentAim.isEnabled()) {
+            if (silentAimActive()) {
                 minecraft.thePlayer.swingItem();
                 minecraft.playerController.attackEntity(minecraft.thePlayer, attackingEntity);
             } else {
@@ -231,7 +245,7 @@ public final class KillAuraModule extends Module {
 
     public boolean shouldOverrideMouseOver() {
         Minecraft minecraft = Minecraft.getMinecraft();
-        if (silentAim.isEnabled()) {
+        if (silentAimActive()) {
             return false;
         }
         return isEnabled()

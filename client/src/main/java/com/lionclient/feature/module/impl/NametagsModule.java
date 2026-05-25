@@ -7,13 +7,18 @@ import com.lionclient.feature.setting.NumberSetting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.client.renderer.entity.RenderItem;
 import net.minecraft.client.renderer.entity.RenderManager;
+import net.minecraft.client.renderer.texture.TextureMap;
+import net.minecraft.client.resources.model.IBakedModel;
 import net.minecraft.client.renderer.WorldRenderer;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
 import net.minecraft.scoreboard.Team;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
@@ -31,6 +36,7 @@ public final class NametagsModule extends Module {
     private final NumberSetting scale = new NumberSetting("Scale", 50, 300, 5, 100);
     private final BooleanSetting border = new BooleanSetting("Border", true);
     private final BooleanSetting playersOnly = new BooleanSetting("Players Only", false);
+    private final BooleanSetting showArmor = new BooleanSetting("Show Armor", false);
 
     private boolean registered;
 
@@ -39,6 +45,7 @@ public final class NametagsModule extends Module {
         addSetting(scale);
         addSetting(border);
         addSetting(playersOnly);
+        addSetting(showArmor);
     }
 
     @Override
@@ -182,6 +189,9 @@ public final class NametagsModule extends Module {
             GlStateManager.enableDepth();
             GlStateManager.depthMask(true);
             font.drawString(text, -halfWidth, 0, 0xFFFFFFFF);
+            if (showArmor.isEnabled() && entity instanceof EntityPlayer) {
+                drawArmorRow(mc, (EntityPlayer) entity);
+            }
         } finally {
             GlStateManager.disableBlend();
             GlStateManager.enableDepth();
@@ -198,6 +208,78 @@ public final class NametagsModule extends Module {
         float distance = (float) Math.sqrt(distanceSq);
         float scaled = LABEL_BASE_SCALE * Math.max(1.0F, (distance / LABEL_DISTANCE_REFERENCE) * LABEL_DISTANCE_MULTIPLIER);
         return Math.min(LABEL_MAX_SCALE, scaled);
+    }
+
+    private void drawArmorRow(Minecraft mc, EntityPlayer player) {
+        ItemStack[] armor = player.inventory.armorInventory;
+        if (armor == null) {
+            return;
+        }
+        int count = 0;
+        for (int i = 0; i < armor.length; i++) {
+            if (armor[i] != null) {
+                count++;
+            }
+        }
+        if (count == 0) {
+            return;
+        }
+
+        RenderItem renderItem = mc.getRenderItem();
+        if (renderItem == null) {
+            return;
+        }
+
+        float itemSize = 30.0F;
+        float spacing = 32.0F;
+        float totalWidth = count * spacing;
+        float startX = -totalWidth / 2.0F;
+        float centerY = -itemSize / 2.0F - 4.0F;
+
+        GlStateManager.pushMatrix();
+        try {
+            mc.getTextureManager().bindTexture(TextureMap.locationBlocksTexture);
+            mc.getTextureManager().getTexture(TextureMap.locationBlocksTexture).setBlurMipmap(false, false);
+            RenderHelper.enableGUIStandardItemLighting();
+            GlStateManager.enableRescaleNormal();
+            GlStateManager.enableAlpha();
+            GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1F);
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+
+            int drawn = 0;
+            for (int i = armor.length - 1; i >= 0; i--) {
+                ItemStack stack = armor[i];
+                if (stack == null) {
+                    continue;
+                }
+                float centerX = startX + drawn * spacing + spacing / 2.0F;
+                drawn++;
+
+                IBakedModel model = renderItem.getItemModelMesher().getItemModel(stack);
+                if (model == null) {
+                    continue;
+                }
+
+                GlStateManager.pushMatrix();
+                try {
+                    GlStateManager.translate(centerX, centerY, 0.0F);
+                    GlStateManager.scale(itemSize, -itemSize, itemSize);
+                    renderItem.renderItem(stack, model);
+                } finally {
+                    GlStateManager.popMatrix();
+                }
+            }
+
+            GlStateManager.disableAlpha();
+            GlStateManager.disableRescaleNormal();
+            RenderHelper.disableStandardItemLighting();
+            GlStateManager.disableLighting();
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        } finally {
+            GlStateManager.popMatrix();
+        }
     }
 
     private void drawBackground(int halfWidth) {
