@@ -158,6 +158,9 @@ public final class ClickGuiScreen extends GuiScreen {
             Module currentlyHoveredModule = null;
             int currentHoveredRowY = 0;
             for (Module module : modules) {
+                if (!module.isVisible()) {
+                    continue;
+                }
                 int color = module.isEnabled() ? (0xFF000000 | accent) : 0xFF8A8F9E;
                 Gui.drawRect(x + 2, rowY + 1, x + WIDTH - 2, rowY + ROW_HEIGHT - 1, 0x80262B3E);
                 fontRenderer.drawString(module.getName(), x + 6, rowY + 3, color);
@@ -210,6 +213,9 @@ public final class ClickGuiScreen extends GuiScreen {
 
             int rowY = y + HEADER_HEIGHT;
             for (Module module : modules) {
+                if (!module.isVisible()) {
+                    continue;
+                }
                 if (isHovered(mouseX, mouseY, x, rowY, WIDTH, ROW_HEIGHT)) {
                     if (mouseButton == 0) {
                         module.toggle();
@@ -257,7 +263,12 @@ public final class ClickGuiScreen extends GuiScreen {
         }
 
         private int getContentHeight() {
-            int rows = modules.size();
+            int rows = 0;
+            for (Module module : modules) {
+                if (module.isVisible()) {
+                    rows++;
+                }
+            }
             if (expandedModule != null) {
                 for (Setting setting : expandedModule.getSettings()) {
                     if (setting.isVisible()) {

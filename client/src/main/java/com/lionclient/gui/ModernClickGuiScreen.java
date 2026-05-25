@@ -380,7 +380,7 @@ public final class ModernClickGuiScreen extends GuiScreen {
             return false;
         }
 
-        List<Module> modules = moduleManager.getModules(selectedCategory);
+        List<Module> modules = moduleManager.getVisibleModules(selectedCategory);
         int rowY = layout.moduleContentTop - Math.round(moduleScroll);
         for (Module module : modules) {
             Bounds rowBounds = new Bounds(layout.modulePaneX + 6, rowY, layout.modulePaneX + layout.modulePaneWidth - 6, rowY + MODULE_ROW_HEIGHT);
@@ -563,7 +563,7 @@ public final class ModernClickGuiScreen extends GuiScreen {
         drawRoundedRect(layout.modulePaneX, layout.modulePaneY, layout.modulePaneX + layout.modulePaneWidth, layout.modulePaneBottom, 8.0F, withAlpha(SURFACE_PANEL, 210));
         drawRoundedOutline(layout.modulePaneX, layout.modulePaneY, layout.modulePaneX + layout.modulePaneWidth, layout.modulePaneBottom, 8.0F, withAlpha(SURFACE_PANEL_OUTLINE, 125));
 
-        List<Module> modules = moduleManager.getModules(selectedCategory);
+        List<Module> modules = moduleManager.getVisibleModules(selectedCategory);
         float maxScroll = Math.max(0.0F, modules.size() * (MODULE_ROW_HEIGHT + MODULE_ROW_GAP) - MODULE_ROW_GAP - layout.moduleScrollBounds.getHeight());
         moduleScrollTarget = clamp(moduleScrollTarget, 0.0F, maxScroll);
         moduleScroll = animate(moduleScroll, moduleScrollTarget, delta * 14.0F);
@@ -636,7 +636,7 @@ public final class ModernClickGuiScreen extends GuiScreen {
         GlStateManager.pushMatrix();
         GlStateManager.translate(xOffset, 0.0F, 0.0F);
 
-        List<Module> modules = moduleManager.getModules(category);
+        List<Module> modules = moduleManager.getVisibleModules(category);
         if (modules.isEmpty()) {
             drawCenteredString(this.fontRendererObj, "No modules", layout.modulePaneX + (layout.modulePaneWidth / 2), layout.modulePaneY + 48, scaleAlpha(TEXT_SECONDARY, alphaScale));
             GlStateManager.popMatrix();
@@ -1094,11 +1094,11 @@ public final class ModernClickGuiScreen extends GuiScreen {
     }
 
     private void ensureSelection() {
-        if (selectedCategory == null || moduleManager.getModules(selectedCategory).isEmpty()) {
+        if (selectedCategory == null || moduleManager.getVisibleModules(selectedCategory).isEmpty()) {
             selectedCategory = findFirstCategory();
         }
 
-        List<Module> modules = moduleManager.getModules(selectedCategory);
+        List<Module> modules = moduleManager.getVisibleModules(selectedCategory);
         if (modules.isEmpty()) {
             selectedModule = null;
             return;
@@ -1111,7 +1111,7 @@ public final class ModernClickGuiScreen extends GuiScreen {
 
     private Category findFirstCategory() {
         for (Category category : Category.values()) {
-            if (!moduleManager.getModules(category).isEmpty()) {
+            if (!moduleManager.getVisibleModules(category).isEmpty()) {
                 return category;
             }
         }

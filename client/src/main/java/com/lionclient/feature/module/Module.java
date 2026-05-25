@@ -75,6 +75,10 @@ public abstract class Module {
         return enabled;
     }
 
+    public boolean isVisible() {
+        return true;
+    }
+
     public String getHudInfo() {
         return "";
     }

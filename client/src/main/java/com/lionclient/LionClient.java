@@ -1,5 +1,6 @@
 package com.lionclient;
 
+import com.lionclient.combat.lag.LagHandler;
 import com.lionclient.feature.module.ModuleManager;
 import com.lionclient.feature.module.impl.ClickGuiModule;
 import com.lionclient.feature.module.impl.HudModule;
@@ -58,6 +59,11 @@ public final class LionClient {
                 lion.client.ClientLogger.error("[LionClient] fmlBus.register failed", t);
             }
         }
+        try {
+            forgeBus.register(LagHandler.get());
+        } catch (Throwable t) {
+            lion.client.ClientLogger.error("[LionClient] LagHandler register failed", t);
+        }
     }
 
     public void toggleClickGui() {
@@ -102,6 +108,7 @@ public final class LionClient {
             return;
         }
         moduleManager.onClientTick();
+        try { LagHandler.get().onGameTick(); } catch (Throwable ignored) {}
         try { knockbackDelayBuffer.onClientTick(); } catch (Throwable ignored) {}
         try { com.lionclient.combat.ClientRotationHelper.get().restoreTickSwap(); } catch (Throwable ignored) {}
         try { com.lionclient.combat.ClientRotationHelper.get().endOfTickReset(); } catch (Throwable ignored) {}

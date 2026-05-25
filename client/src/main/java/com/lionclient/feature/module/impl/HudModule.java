@@ -144,7 +144,7 @@ public final class HudModule extends Module {
         }
 
         for (Module module : client.getModuleManager().getModules()) {
-            if (!module.isEnabled() || module == this) {
+            if (!module.isEnabled() || module == this || !module.isVisible()) {
                 continue;
             }
             String hudInfo = module.getHudInfo();

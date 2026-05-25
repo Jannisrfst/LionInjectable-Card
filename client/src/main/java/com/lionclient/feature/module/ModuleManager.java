@@ -2,6 +2,7 @@ package com.lionclient.feature.module;
 
 import com.lionclient.config.ConfigManager;
 import com.lionclient.feature.module.impl.AimAssistModule;
+import com.lionclient.feature.module.impl.AutoBlockModule;
 import com.lionclient.feature.module.impl.AutoClickerModule;
 import com.lionclient.feature.module.impl.AntiBotModule;
 import com.lionclient.feature.module.impl.AntiFireballModule;
@@ -14,6 +15,7 @@ import com.lionclient.feature.module.impl.KillAuraModule;
 import com.lionclient.feature.module.impl.ClutchModule;
 import com.lionclient.feature.module.impl.KnockbackDelayModule;
 import com.lionclient.feature.module.impl.LegitScaffoldModule;
+import com.lionclient.feature.module.impl.NametagsModule;
 import com.lionclient.feature.module.impl.PlayerEspModule;
 import com.lionclient.feature.module.impl.ReachModule;
 import com.lionclient.feature.module.impl.RightClickerModule;
@@ -54,6 +56,7 @@ public final class ModuleManager {
         register(new AntiFireballModule());
         register(new AimAssistModule());
         register(new KillAuraModule());
+        register(new AutoBlockModule());
         register(new KnockbackDelayModule());
         if (lion.client.hook.LauncherDetection.detect().kind
                 != lion.client.hook.LauncherDetection.Kind.BADLION) {
@@ -62,6 +65,7 @@ public final class ModuleManager {
         register(new ClickRecorderModule());
         register(new ClickGuiModule());
         register(new PlayerEspModule());
+        register(new NametagsModule());
         register(new HudModule());
         register(new TrajectoriesModule());
         configManager = new ConfigManager(this);
@@ -81,6 +85,17 @@ public final class ModuleManager {
 
     public List<Module> getModules(Category category) {
         return Collections.unmodifiableList(modulesByCategory.get(category));
+    }
+
+    public List<Module> getVisibleModules(Category category) {
+        List<Module> source = modulesByCategory.get(category);
+        List<Module> visible = new ArrayList<Module>(source.size());
+        for (Module module : source) {
+            if (module.isVisible()) {
+                visible.add(module);
+            }
+        }
+        return Collections.unmodifiableList(visible);
     }
 
     public <T extends Module> T getModule(Class<T> moduleClass) {
