@@ -56,10 +56,10 @@ public final class ModuleManager {
         register(new AntiFireballModule());
         register(new AimAssistModule());
         register(new KillAuraModule());
-        register(new AutoBlockModule());
         register(new KnockbackDelayModule());
         if (lion.client.hook.LauncherDetection.detect().kind
                 != lion.client.hook.LauncherDetection.Kind.BADLION) {
+            register(new AutoBlockModule());
             register(ClutchModule.getInstance());
         }
         register(new ClickRecorderModule());

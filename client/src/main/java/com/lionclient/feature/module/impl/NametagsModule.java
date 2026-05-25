@@ -8,13 +8,15 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.renderer.WorldRenderer;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.scoreboard.Team;
 import net.minecraft.util.EnumChatFormatting;
-import net.minecraftforge.client.event.RenderLivingEvent;
+import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.lwjgl.input.Keyboard;
@@ -56,31 +58,52 @@ public final class NametagsModule extends Module {
     }
 
     @SubscribeEvent
-    @SuppressWarnings("rawtypes")
-    public void onRenderNametag(RenderLivingEvent.Specials.Pre event) {
-        EntityLivingBase entity = event.entity;
-        if (entity == null) {
+    public void onRenderWorldLast(RenderWorldLastEvent event) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc == null || mc.theWorld == null || mc.thePlayer == null) {
             return;
         }
-        if (playersOnly.isEnabled() && !(entity instanceof EntityPlayer)) {
-            return;
-        }
-        if (!shouldShowNametag(entity)) {
+        RenderManager renderManager = mc.getRenderManager();
+        if (renderManager == null) {
             return;
         }
 
-        String text = resolveLabel(entity);
-        if (text == null || text.isEmpty()) {
-            return;
-        }
+        float partialTicks = event.partialTicks;
+        for (Object obj : mc.theWorld.loadedEntityList) {
+            if (!(obj instanceof EntityLivingBase)) {
+                continue;
+            }
+            EntityLivingBase entity = (EntityLivingBase) obj;
+            if (playersOnly.isEnabled() && !(entity instanceof EntityPlayer)) {
+                continue;
+            }
+            if (!shouldShowNametag(entity, mc)) {
+                continue;
+            }
 
-        renderCustomNametag(entity, text, event.x, event.y, event.z);
-        event.setCanceled(true);
+            String text = resolveLabel(entity);
+            if (text == null || text.isEmpty()) {
+                continue;
+            }
+
+            double x = interpolate(entity.lastTickPosX, entity.posX, partialTicks) - renderManager.viewerPosX;
+            double y = interpolate(entity.lastTickPosY, entity.posY, partialTicks) - renderManager.viewerPosY;
+            double z = interpolate(entity.lastTickPosZ, entity.posZ, partialTicks) - renderManager.viewerPosZ;
+
+            renderCustomNametag(mc, renderManager, entity, text, x, y, z);
+        }
     }
 
-    private boolean shouldShowNametag(EntityLivingBase entity) {
-        Minecraft mc = Minecraft.getMinecraft();
+    private static double interpolate(double prev, double current, float partialTicks) {
+        return prev + (current - prev) * partialTicks;
+    }
+
+    private boolean shouldShowNametag(EntityLivingBase entity, Minecraft mc) {
         if (entity == mc.getRenderViewEntity()) {
+            return false;
+        }
+        Entity riding = mc.thePlayer == null ? null : mc.thePlayer.ridingEntity;
+        if (entity == riding) {
             return false;
         }
 
@@ -125,18 +148,14 @@ public final class NametagsModule extends Module {
         return EnumChatFormatting.getTextWithoutFormattingCodes(text);
     }
 
-    private void renderCustomNametag(EntityLivingBase entity, String text, double x, double y, double z) {
-        Minecraft mc = Minecraft.getMinecraft();
+    private void renderCustomNametag(Minecraft mc, RenderManager renderManager, EntityLivingBase entity,
+                                     String text, double x, double y, double z) {
         FontRenderer font = mc.fontRendererObj;
         if (font == null) {
             return;
         }
 
-        double dx = entity.posX - mc.getRenderManager().viewerPosX;
-        double dy = entity.posY - mc.getRenderManager().viewerPosY;
-        double dz = entity.posZ - mc.getRenderManager().viewerPosZ;
-        double distanceSq = dx * dx + dy * dy + dz * dz;
-
+        double distanceSq = x * x + y * y + z * z;
         float labelScale = getLabelScale(distanceSq) * (scale.getValue() / 100.0F);
         double labelY = y + entity.height + 0.5D - (entity.isSneaking() ? 0.25D : 0.0D);
 
@@ -144,8 +163,8 @@ public final class NametagsModule extends Module {
         try {
             GlStateManager.translate(x, labelY, z);
             GL11.glNormal3f(0.0F, 1.0F, 0.0F);
-            GlStateManager.rotate(-mc.getRenderManager().playerViewY, 0.0F, 1.0F, 0.0F);
-            GlStateManager.rotate(mc.getRenderManager().playerViewX, 1.0F, 0.0F, 0.0F);
+            GlStateManager.rotate(-renderManager.playerViewY, 0.0F, 1.0F, 0.0F);
+            GlStateManager.rotate(renderManager.playerViewX, 1.0F, 0.0F, 0.0F);
             GlStateManager.scale(-labelScale, -labelScale, labelScale);
             GlStateManager.disableLighting();
             GlStateManager.depthMask(false);
