@@ -29,6 +29,7 @@ import org.lwjgl.input.Mouse;
 public final class AutoClickerModule extends Module {
     private final Random random = new Random();
     private final Method guiClickMethod;
+    private final Method clickMouseMethod;
     private final Field leftClickCounterField;
 
     private final EnumSetting<Mode> mode = new EnumSetting<Mode>("Mode", Mode.values(), Mode.NORMAL);
@@ -51,6 +52,7 @@ public final class AutoClickerModule extends Module {
     public AutoClickerModule() {
         super("LeftClicker", "Automatically left-clicks for you, use mode Record for strict anticheats like Polar.", Category.COMBAT, Keyboard.KEY_NONE);
         guiClickMethod = findGuiClickMethod();
+        clickMouseMethod = findClickMouseMethod();
         leftClickCounterField = findLeftClickCounterField();
         minCps.setVisibility(new java.util.function.BooleanSupplier() {
             @Override
@@ -136,7 +138,7 @@ public final class AutoClickerModule extends Module {
         if (now - lastClick >= delay) {
             lastClick = now;
             holdUntil = now + holdLength;
-            sendClick(true);
+            performRealClick();
             leftDown = true;
         } else if (leftDown && now >= holdUntil) {
             sendClick(false);
@@ -163,7 +165,7 @@ public final class AutoClickerModule extends Module {
             return;
         }
 
-        sendClick(true);
+        performRealClick();
         sendClick(false);
 
         recordIndex++;
@@ -173,6 +175,23 @@ public final class AutoClickerModule extends Module {
 
         recordNextClickTime = now + Math.max(0, delays.get(recordIndex).intValue());
         recordNoticeShown = false;
+    }
+
+    private void performRealClick() {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        int key = minecraft.gameSettings.keyBindAttack.getKeyCode();
+        KeyBinding.setKeyBindState(key, true);
+        setMouseButtonState(0, true);
+
+        if (clickMouseMethod != null) {
+            try {
+                clickMouseMethod.invoke(minecraft);
+                return;
+            } catch (IllegalAccessException | InvocationTargetException ignored) {
+            }
+        }
+
+        KeyBinding.onTick(key);
     }
 
     private void sendClick(boolean pressed) {
@@ -338,6 +357,22 @@ public final class AutoClickerModule extends Module {
                 Integer.TYPE,
                 Integer.TYPE,
                 Integer.TYPE
+            );
+            if (method != null) {
+                method.setAccessible(true);
+            }
+            return method;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private Method findClickMouseMethod() {
+        try {
+            Method method = ReflectionHelper.findMethod(
+                Minecraft.class,
+                null,
+                new String[]{"func_147116_af", "clickMouse"}
             );
             if (method != null) {
                 method.setAccessible(true);

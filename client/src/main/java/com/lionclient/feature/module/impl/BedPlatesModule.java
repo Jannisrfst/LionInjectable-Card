@@ -19,6 +19,7 @@ import java.util.Set;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockBed;
 import net.minecraft.block.material.Material;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.FontRenderer;
@@ -26,8 +27,14 @@ import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.WorldRenderer;
+import net.minecraft.client.renderer.entity.RenderItem;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.renderer.texture.TextureMap;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+import net.minecraft.client.resources.model.IBakedModel;
 import net.minecraft.init.Blocks;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.MathHelper;
 import net.minecraft.world.chunk.Chunk;
@@ -294,28 +301,40 @@ public final class BedPlatesModule extends Module {
         return new BedPair(first, second);
     }
 
-    private Set<String> collectDefenseBlocks(WorldClient world, BlockPos first, BlockPos second) {
-        Set<String> names = new LinkedHashSet<String>();
+    private List<ItemStack> collectDefenseBlocks(WorldClient world, BlockPos first, BlockPos second) {
+        Set<String> seen = new LinkedHashSet<String>();
+        List<ItemStack> stacks = new ArrayList<ItemStack>();
         int radius = layers.getValue();
 
         for (int dx = -radius; dx <= radius; dx++) {
             for (int dy = 0; dy <= radius; dy++) {
                 for (int dz = -radius; dz <= radius; dz++) {
-                    addDefenseBlock(world, names, first.add(dx, dy, dz));
-                    addDefenseBlock(world, names, second.add(dx, dy, dz));
+                    addDefenseBlock(world, seen, stacks, first.add(dx, dy, dz));
+                    addDefenseBlock(world, seen, stacks, second.add(dx, dy, dz));
                 }
             }
         }
 
-        return names;
+        return stacks;
     }
 
-    private void addDefenseBlock(WorldClient world, Set<String> names, BlockPos pos) {
-        Block block = world.getBlockState(pos).getBlock();
+    private void addDefenseBlock(WorldClient world, Set<String> seen, List<ItemStack> stacks, BlockPos pos) {
+        IBlockState state = world.getBlockState(pos);
+        Block block = state.getBlock();
         if (block == null || block == Blocks.air || block instanceof BlockBed || block.getMaterial() == Material.air) {
             return;
         }
-        names.add(cleanBlockName(block));
+
+        Item item = Item.getItemFromBlock(block);
+        if (item == null) {
+            return;
+        }
+
+        int meta = block.damageDropped(state);
+        String key = Item.itemRegistry.getNameForObject(item) + ":" + meta;
+        if (seen.add(key)) {
+            stacks.add(new ItemStack(item, 1, meta));
+        }
     }
 
     private boolean isBedBlock(WorldClient world, BlockPos pos) {
@@ -340,22 +359,6 @@ public final class BedPlatesModule extends Module {
         return deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
     }
 
-    private String cleanBlockName(Block block) {
-        String name = block.getLocalizedName();
-        if (name != null && !name.trim().isEmpty()) {
-            return name;
-        }
-
-        Object fallbackObject = Block.blockRegistry.getNameForObject(block);
-        String fallback = fallbackObject == null ? null : fallbackObject.toString();
-        if (fallback == null) {
-            return "Unknown";
-        }
-        int separator = fallback.indexOf(':');
-        String simple = separator >= 0 ? fallback.substring(separator + 1) : fallback;
-        return simple.replace('_', ' ');
-    }
-
     private void renderLabel(Minecraft mc, BedRenderInfo bed) {
         FontRenderer font = mc.fontRendererObj;
         double viewerX = mc.getRenderManager().viewerPosX;
@@ -366,10 +369,9 @@ public final class BedPlatesModule extends Module {
         double y = Math.max(bed.first.getY(), bed.second.getY()) + 1.35D - viewerY;
         double z = (bed.first.getZ() + bed.second.getZ()) / 2.0D + 0.5D - viewerZ;
 
-        String defenseText = bed.defenses.isEmpty() ? "Uncovered" : joinNames(bed.defenses);
-        if (showDistance.isEnabled()) {
-            defenseText = defenseText + String.format(Locale.US, " [%.1fm]", Math.sqrt(bed.distanceSq));
-        }
+        String distanceText = showDistance.isEnabled()
+            ? String.format(Locale.US, "%.1fm", Math.sqrt(bed.distanceSq))
+            : null;
 
         float scale = getLabelScale(bed.distanceSq);
         GlStateManager.pushMatrix();
@@ -379,19 +381,24 @@ public final class BedPlatesModule extends Module {
             GlStateManager.rotate(-mc.getRenderManager().playerViewY, 0.0F, 1.0F, 0.0F);
             GlStateManager.rotate(mc.getRenderManager().playerViewX, 1.0F, 0.0F, 0.0F);
             GlStateManager.scale(-scale, -scale, scale);
-            GlStateManager.disableLighting();
-            GlStateManager.depthMask(false);
-            GlStateManager.disableDepth();
-            GlStateManager.enableBlend();
-            GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
-            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
 
-            int width = font.getStringWidth(defenseText) / 2;
-            drawBackground(width);
-            font.drawString(defenseText, -width, 0, 0x20FFFFFF);
-            GlStateManager.enableDepth();
-            GlStateManager.depthMask(true);
-            font.drawString(defenseText, -width, 0, 0xFFFFFFFF);
+            if (bed.defenses.isEmpty()) {
+                GlStateManager.disableLighting();
+                GlStateManager.depthMask(false);
+                GlStateManager.disableDepth();
+                GlStateManager.enableBlend();
+                GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
+                GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+
+                String text = "Uncovered";
+                int width = font.getStringWidth(text) / 2;
+                drawBackground(width);
+                GlStateManager.enableDepth();
+                GlStateManager.depthMask(true);
+                font.drawString(text, -width, 0, 0xFFFFFFFF);
+            } else {
+                drawDefenseIcons(mc, font, bed.defenses, distanceText);
+            }
         } finally {
             GlStateManager.disableBlend();
             GlStateManager.enableDepth();
@@ -402,6 +409,83 @@ public final class BedPlatesModule extends Module {
             GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
             GlStateManager.popMatrix();
         }
+    }
+
+    private void drawDefenseIcons(Minecraft mc, FontRenderer font, List<ItemStack> defenses, String distanceText) {
+        RenderItem renderItem = mc.getRenderItem();
+        if (renderItem == null) {
+            return;
+        }
+
+        float iconSize = 16.0F;
+        float spacing = 18.0F;
+        int count = defenses.size();
+        float totalWidth = count * spacing;
+        float startX = -totalWidth / 2.0F;
+
+        GlStateManager.disableLighting();
+        GlStateManager.depthMask(false);
+        GlStateManager.disableDepth();
+        GlStateManager.enableBlend();
+        GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        drawBackgroundRect(startX - 2.0F, -iconSize - 2.0F, startX + totalWidth + 2.0F, 2.0F);
+
+        if (distanceText != null) {
+            int width = font.getStringWidth(distanceText) / 2;
+            font.drawString(distanceText, -width, 4, 0xFFFFFFFF);
+        }
+
+        mc.getTextureManager().bindTexture(TextureMap.locationBlocksTexture);
+        GlStateManager.enableTexture2D();
+        GlStateManager.enableAlpha();
+        GlStateManager.alphaFunc(GL11.GL_GREATER, 0.01F);
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+
+        for (int i = 0; i < count; i++) {
+            ItemStack stack = defenses.get(i);
+            TextureAtlasSprite sprite = resolveSprite(renderItem, stack);
+            if (sprite == null) {
+                continue;
+            }
+
+            float left = startX + i * spacing + (spacing - iconSize) / 2.0F;
+            float top = -iconSize;
+            drawSpriteQuad(sprite, left, top, iconSize);
+        }
+
+        GlStateManager.disableAlpha();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+    }
+
+    private TextureAtlasSprite resolveSprite(RenderItem renderItem, ItemStack stack) {
+        try {
+            IBakedModel model = renderItem.getItemModelMesher().getItemModel(stack);
+            TextureAtlasSprite sprite = model == null ? null : model.getParticleTexture();
+            if (sprite != null) {
+                return sprite;
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private void drawSpriteQuad(TextureAtlasSprite sprite, float left, float top, float size) {
+        float minU = sprite.getMinU();
+        float maxU = sprite.getMaxU();
+        float minV = sprite.getMinV();
+        float maxV = sprite.getMaxV();
+        float right = left + size;
+        float bottom = top + size;
+
+        Tessellator tessellator = Tessellator.getInstance();
+        WorldRenderer renderer = tessellator.getWorldRenderer();
+        renderer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
+        renderer.pos(left, bottom, 0.0D).tex(minU, maxV).endVertex();
+        renderer.pos(right, bottom, 0.0D).tex(maxU, maxV).endVertex();
+        renderer.pos(right, top, 0.0D).tex(maxU, minV).endVertex();
+        renderer.pos(left, top, 0.0D).tex(minU, minV).endVertex();
+        tessellator.draw();
     }
 
     private float getLabelScale(double distanceSq) {
@@ -423,21 +507,17 @@ public final class BedPlatesModule extends Module {
         GlStateManager.enableTexture2D();
     }
 
-    private String joinNames(Set<String> names) {
-        StringBuilder builder = new StringBuilder();
-        int index = 0;
-        for (String name : names) {
-            if (index > 0) {
-                builder.append(", ");
-            }
-            builder.append(name);
-            index++;
-            if (builder.length() > 48 && index < names.size()) {
-                builder.append("...");
-                break;
-            }
-        }
-        return builder.toString();
+    private void drawBackgroundRect(float minX, float minY, float maxX, float maxY) {
+        Tessellator tessellator = Tessellator.getInstance();
+        WorldRenderer renderer = tessellator.getWorldRenderer();
+        GlStateManager.disableTexture2D();
+        renderer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+        renderer.pos(minX, minY, 0.0D).color(0.0F, 0.0F, 0.0F, 0.45F).endVertex();
+        renderer.pos(minX, maxY, 0.0D).color(0.0F, 0.0F, 0.0F, 0.45F).endVertex();
+        renderer.pos(maxX, maxY, 0.0D).color(0.0F, 0.0F, 0.0F, 0.45F).endVertex();
+        renderer.pos(maxX, minY, 0.0D).color(0.0F, 0.0F, 0.0F, 0.45F).endVertex();
+        tessellator.draw();
+        GlStateManager.enableTexture2D();
     }
 
     private void resetCache() {
@@ -497,9 +577,9 @@ public final class BedPlatesModule extends Module {
     private static final class CachedBed {
         private final BlockPos first;
         private final BlockPos second;
-        private final Set<String> defenses;
+        private final List<ItemStack> defenses;
 
-        private CachedBed(BlockPos first, BlockPos second, Set<String> defenses) {
+        private CachedBed(BlockPos first, BlockPos second, List<ItemStack> defenses) {
             this.first = first;
             this.second = second;
             this.defenses = defenses;
@@ -509,10 +589,10 @@ public final class BedPlatesModule extends Module {
     private static final class BedRenderInfo {
         private final BlockPos first;
         private final BlockPos second;
-        private final Set<String> defenses;
+        private final List<ItemStack> defenses;
         private final double distanceSq;
 
-        private BedRenderInfo(BlockPos first, BlockPos second, Set<String> defenses, double distanceSq) {
+        private BedRenderInfo(BlockPos first, BlockPos second, List<ItemStack> defenses, double distanceSq) {
             this.first = first;
             this.second = second;
             this.defenses = defenses;

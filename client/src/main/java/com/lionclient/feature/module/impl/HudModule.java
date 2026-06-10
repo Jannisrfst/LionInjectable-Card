@@ -4,6 +4,7 @@ import com.lionclient.LionClient;
 import com.lionclient.feature.module.Category;
 import com.lionclient.feature.module.Module;
 import com.lionclient.feature.setting.ActionSetting;
+import com.lionclient.feature.setting.BooleanSetting;
 import com.lionclient.feature.setting.EnumSetting;
 import com.lionclient.feature.setting.NumberSetting;
 import java.util.ArrayList;
@@ -20,7 +21,11 @@ public final class HudModule extends Module {
     private static final int DEFAULT_Y = 4;
     private static HudModule instance;
 
+    private static final String LOGO_TEXT = "LionClient";
+    private static final float LOGO_SCALE = 2.0F;
+
     private final EnumSetting<Mode> mode = new EnumSetting<Mode>("Mode", Mode.values(), Mode.MODERN);
+    private final BooleanSetting logo = new BooleanSetting("Logo", false);
     private final NumberSetting red = new NumberSetting("Red", 0, 255, 5, 255);
     private final NumberSetting green = new NumberSetting("Green", 0, 255, 5, 255);
     private final NumberSetting blue = new NumberSetting("Blue", 0, 255, 5, 255);
@@ -63,6 +68,7 @@ public final class HudModule extends Module {
             }
         });
         addSetting(mode);
+        addSetting(logo);
         addSetting(red);
         addSetting(green);
         addSetting(blue);
@@ -113,11 +119,19 @@ public final class HudModule extends Module {
     }
 
     public int getPreviewWidth(Minecraft minecraft) {
-        return getMaxTextWidth(minecraft, getPreviewModuleNames());
+        int width = getMaxTextWidth(minecraft, getPreviewModuleNames());
+        if (logo.isEnabled()) {
+            width = Math.max(width, (int) (minecraft.fontRendererObj.getStringWidth(LOGO_TEXT) * LOGO_SCALE));
+        }
+        return width;
     }
 
     public int getPreviewHeight(Minecraft minecraft) {
-        return getPreviewModuleNames().size() * (minecraft.fontRendererObj.FONT_HEIGHT + 2);
+        int height = getPreviewModuleNames().size() * (minecraft.fontRendererObj.FONT_HEIGHT + 2);
+        if (logo.isEnabled()) {
+            height += (int) (minecraft.fontRendererObj.FONT_HEIGHT * LOGO_SCALE) + 4;
+        }
+        return height;
     }
 
     private void renderModuleList(ScaledResolution resolution, List<String> moduleNames, int color) {
@@ -128,12 +142,29 @@ public final class HudModule extends Module {
         int lineY = anchorY;
         boolean modern = mode.getValue() == Mode.MODERN;
 
+        if (logo.isEnabled()) {
+            lineY += drawLogo(minecraft, anchorX, lineY, rightAligned, modern ? getModernColor(0) : color);
+        }
+
         for (int i = 0; i < moduleNames.size(); i++) {
             String moduleName = moduleNames.get(i);
             int drawX = rightAligned ? anchorX - minecraft.fontRendererObj.getStringWidth(moduleName) : anchorX;
             minecraft.fontRendererObj.drawStringWithShadow(moduleName, drawX, lineY, modern ? getModernColor(i) : color);
             lineY += minecraft.fontRendererObj.FONT_HEIGHT + 2;
         }
+    }
+
+    private int drawLogo(Minecraft minecraft, int anchorX, int lineY, boolean rightAligned, int color) {
+        float scaledWidth = minecraft.fontRendererObj.getStringWidth(LOGO_TEXT) * LOGO_SCALE;
+        float drawX = rightAligned ? anchorX - scaledWidth : anchorX;
+
+        net.minecraft.client.renderer.GlStateManager.pushMatrix();
+        net.minecraft.client.renderer.GlStateManager.translate(drawX, (float) lineY, 0.0F);
+        net.minecraft.client.renderer.GlStateManager.scale(LOGO_SCALE, LOGO_SCALE, 1.0F);
+        minecraft.fontRendererObj.drawStringWithShadow(LOGO_TEXT, 0.0F, 0.0F, color);
+        net.minecraft.client.renderer.GlStateManager.popMatrix();
+
+        return (int) (minecraft.fontRendererObj.FONT_HEIGHT * LOGO_SCALE) + 4;
     }
 
     private List<String> getEnabledModuleNames() {

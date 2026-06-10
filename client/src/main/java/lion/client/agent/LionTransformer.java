@@ -27,10 +27,13 @@ public final class LionTransformer implements ClassFileTransformer {
     private static final String ENTITY_PLAYER_SP_INT = "net/minecraft/client/entity/EntityPlayerSP";
     private static final String NETWORK_MANAGER_INT  = "net/minecraft/network/NetworkManager";
     private static final String MOVEMENT_INPUT_FROM_OPTIONS_INT = "net/minecraft/util/MovementInputFromOptions";
+    private static final String RENDERER_LIVING_ENTITY_INT = "net/minecraft/client/renderer/entity/RendererLivingEntity";
+    private static final String ENTITY_INT = "net/minecraft/entity/Entity";
 
     private static final String[] MCP_TARGETS = {
             MINECRAFT_INT, ENTITY_RENDERER_INT, GUI_INGAME_INT, ENTITY_PLAYER_SP_INT,
-            NETWORK_MANAGER_INT, MOVEMENT_INPUT_FROM_OPTIONS_INT
+            NETWORK_MANAGER_INT, MOVEMENT_INPUT_FROM_OPTIONS_INT, RENDERER_LIVING_ENTITY_INT,
+            ENTITY_INT
     };
 
     private static volatile Set<String> TARGET_NAMES_INTERNAL = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(MCP_TARGETS)));
@@ -71,10 +74,14 @@ public final class LionTransformer implements ClassFileTransformer {
         addHookLookup(hookSigs, mapping, MINECRAFT_INT, "rightClickMouse", "()V");
         addHookLookup(hookSigs, mapping, ENTITY_RENDERER_INT, "renderWorldPass", "(IFJ)V");
         addHookLookup(hookSigs, mapping, ENTITY_RENDERER_INT, "getMouseOver", "(F)V");
+        addHookLookup(hookSigs, mapping, ENTITY_RENDERER_INT, "orientCamera", "(F)V");
         addHookLookup(hookSigs, mapping, GUI_INGAME_INT, "renderGameOverlay", "(F)V");
         addHookLookup(hookSigs, mapping, ENTITY_PLAYER_SP_INT, "onUpdateWalkingPlayer", "()V");
         addHookLookup(hookSigs, mapping, ENTITY_PLAYER_SP_INT, "onLivingUpdate", "()V");
         addHookLookup(hookSigs, mapping, MOVEMENT_INPUT_FROM_OPTIONS_INT, "updatePlayerMoveState", "()V");
+        addHookLookup(hookSigs, mapping, RENDERER_LIVING_ENTITY_INT, "renderName", "(Lnet/minecraft/entity/Entity;DDD)V");
+        addHookLookup(hookSigs, mapping, RENDERER_LIVING_ENTITY_INT, "renderName", "(Lnet/minecraft/entity/EntityLivingBase;DDD)V");
+        addHookLookup(hookSigs, mapping, ENTITY_INT, "setAngles", "(FF)V");
         NOTCH_METHOD_NAMES = Collections.unmodifiableMap(hookSigs);
 
     }
@@ -121,6 +128,8 @@ public final class LionTransformer implements ClassFileTransformer {
             case ENTITY_PLAYER_SP_INT: return new EntityPlayerSPCV(w);
             case NETWORK_MANAGER_INT:  return new NetworkManagerCV(w);
             case MOVEMENT_INPUT_FROM_OPTIONS_INT: return new MovementInputFromOptionsCV(w);
+            case RENDERER_LIVING_ENTITY_INT: return new RendererLivingEntityCV(w);
+            case ENTITY_INT:           return new EntityCV(w);
             default:                   return w;
         }
     }
@@ -234,7 +243,26 @@ public final class LionTransformer implements ClassFileTransformer {
             if (nameMatches(name, ENTITY_RENDERER_INT, "getMouseOver", "func_78473_a", desc) && "(F)V".equals(desc)) {
                 return new GetMouseOverMV(mv);
             }
+            if (nameMatches(name, ENTITY_RENDERER_INT, "orientCamera", "func_78467_g", desc) && "(F)V".equals(desc)) {
+                return new OrientCameraMV(mv);
+            }
             return mv;
+        }
+    }
+
+    private static final class OrientCameraMV extends MethodVisitor {
+        OrientCameraMV(MethodVisitor mv) { super(Opcodes.ASM9, mv); }
+        @Override
+        public void visitCode() {
+            super.visitCode();
+            super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOKS, "onOrientCameraPre", "()V", false);
+        }
+        @Override
+        public void visitInsn(int opcode) {
+            if (opcode >= Opcodes.IRETURN && opcode <= Opcodes.RETURN) {
+                super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOKS, "onOrientCameraPost", "()V", false);
+            }
+            super.visitInsn(opcode);
         }
     }
 
@@ -340,6 +368,64 @@ public final class LionTransformer implements ClassFileTransformer {
             super.visitVarInsn(Opcodes.ALOAD, 1);
             super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOKS, "onSendPacket",
                     "(Ljava/lang/Object;Ljava/lang/Object;)Z", false);
+            Label continueBody = new Label();
+            super.visitJumpInsn(Opcodes.IFEQ, continueBody);
+            super.visitInsn(Opcodes.RETURN);
+            super.visitLabel(continueBody);
+        }
+    }
+
+    private static final class EntityCV extends ClassVisitor {
+        EntityCV(ClassVisitor cv) { super(Opcodes.ASM9, cv); }
+        @Override
+        public MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] ex) {
+            MethodVisitor mv = super.visitMethod(access, name, desc, sig, ex);
+            if (nameMatches(name, ENTITY_INT, "setAngles", "func_70082_c", desc) && "(FF)V".equals(desc)) {
+                return new SetAnglesMV(mv);
+            }
+            return mv;
+        }
+    }
+
+    private static final class SetAnglesMV extends MethodVisitor {
+        SetAnglesMV(MethodVisitor mv) { super(Opcodes.ASM9, mv); }
+        @Override
+        public void visitCode() {
+            super.visitCode();
+            super.visitVarInsn(Opcodes.ALOAD, 0);
+            super.visitVarInsn(Opcodes.FLOAD, 1);
+            super.visitVarInsn(Opcodes.FLOAD, 2);
+            super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOKS, "onSetAngles",
+                    "(Ljava/lang/Object;FF)Z", false);
+            Label continueBody = new Label();
+            super.visitJumpInsn(Opcodes.IFEQ, continueBody);
+            super.visitInsn(Opcodes.RETURN);
+            super.visitLabel(continueBody);
+        }
+    }
+
+    private static final class RendererLivingEntityCV extends ClassVisitor {
+        RendererLivingEntityCV(ClassVisitor cv) { super(Opcodes.ASM9, cv); }
+        @Override
+        public MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] ex) {
+            MethodVisitor mv = super.visitMethod(access, name, desc, sig, ex);
+            boolean renderNameDesc = "(Lnet/minecraft/entity/Entity;DDD)V".equals(desc)
+                    || "(Lnet/minecraft/entity/EntityLivingBase;DDD)V".equals(desc);
+            if (renderNameDesc && nameMatches(name, RENDERER_LIVING_ENTITY_INT, "renderName", "func_177067_a", desc)) {
+                return new RenderNameMV(mv);
+            }
+            return mv;
+        }
+    }
+
+    private static final class RenderNameMV extends MethodVisitor {
+        RenderNameMV(MethodVisitor mv) { super(Opcodes.ASM9, mv); }
+        @Override
+        public void visitCode() {
+            super.visitCode();
+            super.visitVarInsn(Opcodes.ALOAD, 1);
+            super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOKS, "shouldCancelVanillaNametag",
+                    "(Ljava/lang/Object;)Z", false);
             Label continueBody = new Label();
             super.visitJumpInsn(Opcodes.IFEQ, continueBody);
             super.visitInsn(Opcodes.RETURN);

@@ -8,6 +8,8 @@ import com.lionclient.feature.setting.NumberSetting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemArmor;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import org.lwjgl.input.Keyboard;
@@ -19,6 +21,7 @@ public final class PlayerEspModule extends Module {
     private final NumberSetting green = new NumberSetting("Green", 0, 255, 5, 60);
     private final NumberSetting blue = new NumberSetting("Blue", 0, 255, 5, 60);
     private final BooleanSetting seeInvis = new BooleanSetting("See Invis", false);
+    private final BooleanSetting colorTeams = new BooleanSetting("Color Teams", false);
 
     public PlayerEspModule() {
         super("PlayerESP", "Draws a box around other players trough walls.", Category.RENDER, Keyboard.KEY_NONE);
@@ -45,6 +48,7 @@ public final class PlayerEspModule extends Module {
         addSetting(green);
         addSetting(blue);
         addSetting(seeInvis);
+        addSetting(colorTeams);
     }
 
     @Override
@@ -96,11 +100,13 @@ public final class PlayerEspModule extends Module {
                     bb.maxZ - player.posZ + z
                 ).expand(0.05D, 0.1D, 0.05D);
 
-                float[] colors = modern ? getModernColor(player) : getClassicColor();
-                if (modern) {
+                float[] teamColor = colorTeams.isEnabled() ? getArmorColor(player) : null;
+                float[] colors = teamColor != null ? teamColor : (modern ? getModernColor(player) : getClassicColor());
+                boolean fill = teamColor != null || modern;
+                if (fill) {
                     drawFilledBox(renderBox, colors[0], colors[1], colors[2], 0.12F);
                 }
-                drawOutlinedBox(renderBox, colors[0], colors[1], colors[2], modern ? 0.95F : 1.0F);
+                drawOutlinedBox(renderBox, colors[0], colors[1], colors[2], fill ? 0.95F : 1.0F);
             }
         } finally {
             GL11.glLineWidth(1.0F);
@@ -162,6 +168,31 @@ public final class PlayerEspModule extends Module {
         GL11.glVertex3d(x2, y2, z2);
         GL11.glVertex3d(x3, y3, z3);
         GL11.glVertex3d(x4, y4, z4);
+    }
+
+    private float[] getArmorColor(EntityPlayer player) {
+        ItemStack[] armor = player.inventory.armorInventory;
+        if (armor == null) {
+            return null;
+        }
+
+        for (int i = 0; i < armor.length; i++) {
+            ItemStack stack = armor[i];
+            if (stack == null || !(stack.getItem() instanceof ItemArmor)) {
+                continue;
+            }
+            ItemArmor itemArmor = (ItemArmor) stack.getItem();
+            if (itemArmor.getArmorMaterial() != ItemArmor.ArmorMaterial.LEATHER || !itemArmor.hasColor(stack)) {
+                continue;
+            }
+            int color = itemArmor.getColor(stack);
+            return new float[] {
+                ((color >> 16) & 255) / 255.0F,
+                ((color >> 8) & 255) / 255.0F,
+                (color & 255) / 255.0F
+            };
+        }
+        return null;
     }
 
     private float[] getClassicColor() {

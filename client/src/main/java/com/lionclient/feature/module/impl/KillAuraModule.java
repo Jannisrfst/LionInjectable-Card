@@ -351,6 +351,9 @@ public final class KillAuraModule extends Module {
         if (player.deathTime != 0 || player.getHealth() <= 0.0F || AntiBotModule.shouldIgnore(player)) {
             return null;
         }
+        if (BedwarsModule.isTeammate(player)) {
+            return null;
+        }
         if (entity.isInvisible() && !targetInvis.isEnabled()) {
             return null;
         }

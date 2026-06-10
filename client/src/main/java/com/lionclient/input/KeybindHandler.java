@@ -39,7 +39,12 @@ public final class KeybindHandler {
             int kc = module.getKeyCode();
             if (kc == Keyboard.KEY_NONE || kc < 0 || kc >= prevDown.length) continue;
             boolean down = Keyboard.isKeyDown(kc);
-            if (down && !prevDown[kc]) {
+            boolean pressedEdge = down && !prevDown[kc];
+            if (module.handlesOwnKeybind()) {
+                if (down != prevDown[kc]) {
+                    module.onKeybind(down, pressedEdge);
+                }
+            } else if (pressedEdge) {
                 module.toggle();
             }
             prevDown[kc] = down;

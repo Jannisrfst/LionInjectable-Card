@@ -198,6 +198,59 @@ public final class Hooks {
         } catch (Throwable t) { logOnce("onGetMouseOverPost", t); }
     }
 
+    public static boolean onSetAngles(Object entity, float yawDelta, float pitchDelta) {
+        try {
+            Minecraft mc = Minecraft.getMinecraft();
+            if (mc == null || entity != mc.thePlayer) {
+                return false;
+            }
+            com.lionclient.feature.module.impl.FreeLookModule freeLook =
+                    com.lionclient.feature.module.impl.FreeLookModule.getInstance();
+            if (freeLook != null && freeLook.isActive()) {
+                freeLook.applyMouseDelta(yawDelta, pitchDelta);
+                return true;
+            }
+        } catch (Throwable t) {
+            logOnce("onSetAngles", t);
+        }
+        return false;
+    }
+
+    public static void onOrientCameraPre() {
+        try {
+            com.lionclient.feature.module.impl.FreeLookModule freeLook =
+                    com.lionclient.feature.module.impl.FreeLookModule.getInstance();
+            if (freeLook != null && freeLook.isEnabled()) {
+                freeLook.cameraPre();
+            }
+        } catch (Throwable t) {
+            logOnce("onOrientCameraPre", t);
+        }
+    }
+
+    public static void onOrientCameraPost() {
+        try {
+            com.lionclient.feature.module.impl.FreeLookModule freeLook =
+                    com.lionclient.feature.module.impl.FreeLookModule.getInstance();
+            if (freeLook != null && freeLook.isEnabled()) {
+                freeLook.cameraPost();
+            }
+        } catch (Throwable t) {
+            logOnce("onOrientCameraPost", t);
+        }
+    }
+
+    public static boolean shouldCancelVanillaNametag(Object entity) {
+        try {
+            com.lionclient.feature.module.impl.NametagsModule nametags =
+                    com.lionclient.feature.module.impl.NametagsModule.getInstance();
+            return nametags != null && nametags.shouldHideVanillaNametags();
+        } catch (Throwable t) {
+            logOnce("shouldCancelVanillaNametag", t);
+            return false;
+        }
+    }
+
     public static void onRenderHud(float partialTicks) {
         try {
             ScaledResolution res;

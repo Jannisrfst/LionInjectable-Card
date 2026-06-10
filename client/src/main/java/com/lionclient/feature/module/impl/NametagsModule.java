@@ -33,19 +33,32 @@ public final class NametagsModule extends Module {
     private static final float LABEL_DISTANCE_MULTIPLIER = 6.0F;
     private static final float LABEL_MAX_SCALE = 0.30F;
 
+    private static NametagsModule instance;
+
     private final NumberSetting scale = new NumberSetting("Scale", 50, 300, 5, 100);
     private final BooleanSetting border = new BooleanSetting("Border", true);
     private final BooleanSetting playersOnly = new BooleanSetting("Players Only", false);
     private final BooleanSetting showArmor = new BooleanSetting("Show Armor", false);
+    private final BooleanSetting hideVanilla = new BooleanSetting("Hide Vanilla", true);
 
     private boolean registered;
 
     public NametagsModule() {
         super("Nametags", "Massively scales up nametags and outlines them with the ClickGUI accent color.", Category.RENDER, Keyboard.KEY_NONE);
+        instance = this;
         addSetting(scale);
         addSetting(border);
         addSetting(playersOnly);
         addSetting(showArmor);
+        addSetting(hideVanilla);
+    }
+
+    public static NametagsModule getInstance() {
+        return instance;
+    }
+
+    public boolean shouldHideVanillaNametags() {
+        return isEnabled() && hideVanilla.isEnabled();
     }
 
     @Override

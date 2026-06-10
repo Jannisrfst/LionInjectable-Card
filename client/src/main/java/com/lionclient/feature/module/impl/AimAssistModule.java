@@ -125,6 +125,9 @@ public final class AimAssistModule extends Module {
         if (candidate.deathTime != 0 || candidate.getHealth() <= 0.0F || AntiBotModule.shouldIgnore(candidate)) {
             return false;
         }
+        if (BedwarsModule.isTeammate(candidate)) {
+            return false;
+        }
         if (candidate.isInvisible() && !targetInvis.isEnabled()) {
             return false;
         }

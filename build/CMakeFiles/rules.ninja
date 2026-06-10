@@ -65,7 +65,7 @@ rule CUSTOM_COMMAND
 # Rule for re-running cmake.
 
 rule RERUN_CMAKE
-  command = C:\Users\Lion\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\cmake.exe --regenerate-during-build -SC:\Users\Lion\Desktop\LionInjectable\injector -BC:\Users\Lion\Desktop\LionInjectable\build
+  command = C:\Users\Lion\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\cmake.exe --regenerate-during-build -SC:\Users\Lion\Desktop\trash\LionInjectable\injector -BC:\Users\Lion\Desktop\trash\LionInjectable\build
   description = Re-running CMake...
   generator = 1
 

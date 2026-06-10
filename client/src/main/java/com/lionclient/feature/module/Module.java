@@ -79,6 +79,13 @@ public abstract class Module {
         return true;
     }
 
+    public boolean handlesOwnKeybind() {
+        return false;
+    }
+
+    public void onKeybind(boolean down, boolean pressedEdge) {
+    }
+
     public String getHudInfo() {
         return "";
     }

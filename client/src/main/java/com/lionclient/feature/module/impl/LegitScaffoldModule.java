@@ -18,33 +18,21 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 
-import java.util.Random;
-
 public final class LegitScaffoldModule extends Module {
     private final BooleanSetting pitchCheck = new BooleanSetting("Pitch Check", false);
     private final BooleanSetting requireSneak = new BooleanSetting("Require Sneak", false);
     private final BooleanSetting sneakOnJump = new BooleanSetting("Sneak On Jump", true);
-    private final BooleanSetting fastMode = new BooleanSetting("Fast mode", false);
     private final NumberSetting sneakDelay = new NumberSetting("Sneak Delay", 0, 250, 5, 0);
 
     private long sneakReleaseTime;
     private boolean prevOnGround;
     private long jumpSneakUntil;
 
-    private static final int FAST_MODE_SPRINT_BURST_TICKS = 2;
-
-    private final Random random = new Random();
-    private BlockPos lastBlockPos;
-    private int blocksInCycle;
-    private int sneakBlocks = 2;
-    private int sprintBurstRemaining;
-
     public LegitScaffoldModule() {
         super("LegitScaffold", "Sneaks at block edges.", Category.MOVEMENT, Keyboard.KEY_NONE);
         addSetting(pitchCheck);
         addSetting(requireSneak);
         addSetting(sneakOnJump);
-        addSetting(fastMode);
         addSetting(sneakDelay);
     }
 
@@ -82,21 +70,7 @@ public final class LegitScaffoldModule extends Module {
         }
         prevOnGround = player.onGround;
 
-        updateBlockTraversal(player);
-
         boolean shouldSneakAtEdge = shouldSneakAtEdge(player);
-        if (fastMode.isEnabled() && shouldSneakAtEdge) {
-            if (sprintBurstRemaining > 0) {
-                sprintBurstRemaining--;
-                shouldSneakAtEdge = false;
-            } else if (blocksInCycle >= sneakBlocks) {
-                sprintBurstRemaining = FAST_MODE_SPRINT_BURST_TICKS - 1;
-                blocksInCycle = 0;
-                sneakBlocks = 2 + random.nextInt(2);
-                shouldSneakAtEdge = false;
-            }
-        }
-
         boolean jumpSneaking = sneakOnJump.isEnabled() && System.currentTimeMillis() < jumpSneakUntil;
         if (shouldSneakAtEdge || jumpSneaking) {
             KeyBinding.setKeyBindState(sneakKey, true);
@@ -122,24 +96,6 @@ public final class LegitScaffoldModule extends Module {
         }
         prevOnGround = false;
         jumpSneakUntil = 0L;
-        lastBlockPos = null;
-        blocksInCycle = 0;
-        sneakBlocks = 2 + random.nextInt(2);
-        sprintBurstRemaining = 0;
-    }
-
-    private void updateBlockTraversal(EntityPlayerSP player) {
-        int x = MathHelper.floor_double(player.posX);
-        int z = MathHelper.floor_double(player.posZ);
-        if (lastBlockPos == null) {
-            lastBlockPos = new BlockPos(x, 0, z);
-            blocksInCycle = 0;
-            return;
-        }
-        if (lastBlockPos.getX() != x || lastBlockPos.getZ() != z) {
-            blocksInCycle++;
-            lastBlockPos = new BlockPos(x, 0, z);
-        }
     }
 
     private boolean isUserHoldingSneak(int sneakKey) {
