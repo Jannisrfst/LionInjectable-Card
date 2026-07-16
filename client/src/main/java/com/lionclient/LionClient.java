@@ -7,6 +7,7 @@ import com.lionclient.feature.module.impl.HudModule;
 import com.lionclient.gui.ClickGuiScreen;
 import com.lionclient.gui.HudEditorScreen;
 import com.lionclient.gui.ModernClickGuiScreen;
+import com.lionclient.gui.card.CardClickGuiScreen;
 import com.lionclient.input.KeybindHandler;
 import com.lionclient.network.KnockbackDelayBuffer;
 
@@ -33,6 +34,7 @@ public final class LionClient {
     private final KnockbackDelayBuffer knockbackDelayBuffer = new KnockbackDelayBuffer();
     private final ClickGuiScreen       clickGuiScreen       = new ClickGuiScreen(moduleManager);
     private final ModernClickGuiScreen modernClickGuiScreen = new ModernClickGuiScreen(moduleManager);
+    private final CardClickGuiScreen   cardClickGuiScreen   = new CardClickGuiScreen(moduleManager);
 
     public static LionClient getInstance() { return instance; }
 
@@ -68,24 +70,30 @@ public final class LionClient {
 
     public void toggleClickGui() {
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc.currentScreen == clickGuiScreen || mc.currentScreen == modernClickGuiScreen) {
+        if (mc.currentScreen == clickGuiScreen || mc.currentScreen == modernClickGuiScreen || mc.currentScreen == cardClickGuiScreen) {
             mc.displayGuiScreen(null);
             return;
         }
         if (mc.currentScreen == null) {
-            net.minecraft.client.gui.GuiScreen target = ClickGuiModule.getGuiStyle() == ClickGuiModule.GuiStyle.CLASSIC
-                    ? clickGuiScreen
-                    : modernClickGuiScreen;
-            mc.displayGuiScreen(target);
+            mc.displayGuiScreen(resolveClickGuiScreen());
         }
     }
 
     public void refreshClickGuiStyle() {
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc.currentScreen != clickGuiScreen && mc.currentScreen != modernClickGuiScreen) return;
-        mc.displayGuiScreen(ClickGuiModule.getGuiStyle() == ClickGuiModule.GuiStyle.CLASSIC
-                ? clickGuiScreen
-                : modernClickGuiScreen);
+        if (mc.currentScreen != clickGuiScreen && mc.currentScreen != modernClickGuiScreen && mc.currentScreen != cardClickGuiScreen) return;
+        mc.displayGuiScreen(resolveClickGuiScreen());
+    }
+
+    private net.minecraft.client.gui.GuiScreen resolveClickGuiScreen() {
+        ClickGuiModule.GuiStyle guiStyle = ClickGuiModule.getGuiStyle();
+        if (guiStyle == ClickGuiModule.GuiStyle.CLASSIC) {
+            return clickGuiScreen;
+        }
+        if (guiStyle == ClickGuiModule.GuiStyle.CARD) {
+            return cardClickGuiScreen;
+        }
+        return modernClickGuiScreen;
     }
 
     public void openHudEditor() {
