@@ -123,6 +123,15 @@ public final class ModuleCardRenderer {
         int contentWidth = contentRight - contentLeft;
         int headerTop = y + PADDING;
 
+        // Right-click anywhere on the always-visible (collapsed) part of a card toggles its
+        // expansion — the same effect as tapping the +/- button, just with a bigger hit area.
+        if (button == 1) {
+            int collapsedHeight = (PADDING * 2) + HEADER_HEIGHT + SECTION_GAP + DESC_ROW_HEIGHT;
+            if (mouseX >= x && mouseX <= x + cardWidth && mouseY >= y && mouseY <= y + collapsedHeight) {
+                return ClickResult.EXPAND_TOGGLED;
+            }
+        }
+
         if (button == 0) {
             Bounds toggleBounds = headerToggleBounds(contentRight, headerTop);
             if (toggleBounds.contains(mouseX, mouseY)) {
