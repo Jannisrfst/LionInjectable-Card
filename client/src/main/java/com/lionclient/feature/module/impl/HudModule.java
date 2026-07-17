@@ -7,11 +7,14 @@ import com.lionclient.feature.setting.ActionSetting;
 import com.lionclient.feature.setting.BooleanSetting;
 import com.lionclient.feature.setting.EnumSetting;
 import com.lionclient.feature.setting.NumberSetting;
+import com.lionclient.gui.card.GuiGfx;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import org.lwjgl.input.Keyboard;
@@ -24,11 +27,31 @@ public final class HudModule extends Module {
     private static final String LOGO_TEXT = "LionClient";
     private static final float LOGO_SCALE = 2.0F;
 
-    private final EnumSetting<Mode> mode = new EnumSetting<Mode>("Mode", Mode.values(), Mode.MODERN);
+    /** Dark translucent fill used behind each line in the Clean style. */
+    private static final int BOX_COLOR = 0xC81E1E22;
+
+    private final EnumSetting<Mode> mode = new EnumSetting<Mode>("Mode", Mode.values(), Mode.CLEAN);
     private final BooleanSetting logo = new BooleanSetting("Logo", false);
+    private final BooleanSetting lowercase = new BooleanSetting("Lowercase", true);
+
+    // Clean-style layout
+    private final NumberSetting paddingX = new NumberSetting("Padding X", 0, 20, 1, 5);
+    private final NumberSetting paddingY = new NumberSetting("Padding Y", 0, 20, 1, 2);
+    private final NumberSetting rounding = new NumberSetting("Rounding", 0, 12, 1, 4);
+
+    // Clean-style colors
+    private final NumberSetting textRed = new NumberSetting("Text red", 0, 255, 5, 232);
+    private final NumberSetting textGreen = new NumberSetting("Text green", 0, 255, 5, 120);
+    private final NumberSetting textBlue = new NumberSetting("Text blue", 0, 255, 5, 43);
+    private final NumberSetting detailRed = new NumberSetting("Details red", 0, 255, 5, 170);
+    private final NumberSetting detailGreen = new NumberSetting("Details green", 0, 255, 5, 170);
+    private final NumberSetting detailBlue = new NumberSetting("Details blue", 0, 255, 5, 170);
+
+    // Classic-style solid color
     private final NumberSetting red = new NumberSetting("Red", 0, 255, 5, 255);
     private final NumberSetting green = new NumberSetting("Green", 0, 255, 5, 255);
     private final NumberSetting blue = new NumberSetting("Blue", 0, 255, 5, 255);
+
     private final NumberSetting x = new NumberSetting("X", 0, 4000, 2, DEFAULT_X);
     private final NumberSetting y = new NumberSetting("Y", 0, 4000, 2, DEFAULT_Y);
     private final ActionSetting editor = new ActionSetting("Move HUD", new Runnable() {
@@ -49,26 +72,45 @@ public final class HudModule extends Module {
     public HudModule() {
         super("HUD", "Displays enabled modules on screen.", Category.RENDER, Keyboard.KEY_NONE);
         instance = this;
-        red.setVisibility(new java.util.function.BooleanSupplier() {
+
+        BooleanSupplier isClean = new BooleanSupplier() {
+            @Override
+            public boolean getAsBoolean() {
+                return mode.getValue() == Mode.CLEAN;
+            }
+        };
+        BooleanSupplier isClassic = new BooleanSupplier() {
             @Override
             public boolean getAsBoolean() {
                 return mode.getValue() == Mode.CLASSIC;
             }
-        });
-        green.setVisibility(new java.util.function.BooleanSupplier() {
-            @Override
-            public boolean getAsBoolean() {
-                return mode.getValue() == Mode.CLASSIC;
-            }
-        });
-        blue.setVisibility(new java.util.function.BooleanSupplier() {
-            @Override
-            public boolean getAsBoolean() {
-                return mode.getValue() == Mode.CLASSIC;
-            }
-        });
+        };
+
+        paddingX.setVisibility(isClean);
+        paddingY.setVisibility(isClean);
+        rounding.setVisibility(isClean);
+        textRed.setVisibility(isClean);
+        textGreen.setVisibility(isClean);
+        textBlue.setVisibility(isClean);
+        detailRed.setVisibility(isClean);
+        detailGreen.setVisibility(isClean);
+        detailBlue.setVisibility(isClean);
+        red.setVisibility(isClassic);
+        green.setVisibility(isClassic);
+        blue.setVisibility(isClassic);
+
         addSetting(mode);
         addSetting(logo);
+        addSetting(lowercase);
+        addSetting(paddingX);
+        addSetting(paddingY);
+        addSetting(rounding);
+        addSetting(textRed);
+        addSetting(textGreen);
+        addSetting(textBlue);
+        addSetting(detailRed);
+        addSetting(detailGreen);
+        addSetting(detailBlue);
         addSetting(red);
         addSetting(green);
         addSetting(blue);
@@ -84,17 +126,15 @@ public final class HudModule extends Module {
             return;
         }
 
-        renderModuleList(event.resolution, getEnabledModuleNames(), getColor());
+        renderModuleList(event.resolution, getEnabledEntries());
     }
 
     public void renderEditorPreview(ScaledResolution resolution) {
-        List<String> previewLines = getEnabledModuleNames();
+        List<Entry> previewLines = getEnabledEntries();
         if (previewLines.isEmpty()) {
-            previewLines.add("KillAura");
-            previewLines.add("AutoClicker");
-            previewLines.add("Sprint");
+            previewLines = getSampleEntries();
         }
-        renderModuleList(resolution, previewLines, getColor());
+        renderModuleList(resolution, previewLines);
     }
 
     public static HudModule getInstance() {
@@ -119,7 +159,14 @@ public final class HudModule extends Module {
     }
 
     public int getPreviewWidth(Minecraft minecraft) {
-        int width = getMaxTextWidth(minecraft, getPreviewModuleNames());
+        List<Entry> entries = getPreviewEntries();
+        int width = 0;
+        for (Entry entry : entries) {
+            width = Math.max(width, entryWidth(minecraft.fontRendererObj, entry));
+        }
+        if (mode.getValue() == Mode.CLEAN) {
+            width += paddingX.getValue() * 2;
+        }
         if (logo.isEnabled()) {
             width = Math.max(width, (int) (minecraft.fontRendererObj.getStringWidth(LOGO_TEXT) * LOGO_SCALE));
         }
@@ -127,51 +174,104 @@ public final class HudModule extends Module {
     }
 
     public int getPreviewHeight(Minecraft minecraft) {
-        int height = getPreviewModuleNames().size() * (minecraft.fontRendererObj.FONT_HEIGHT + 2);
+        int height = getPreviewEntries().size() * lineHeight(minecraft.fontRendererObj);
         if (logo.isEnabled()) {
             height += (int) (minecraft.fontRendererObj.FONT_HEIGHT * LOGO_SCALE) + 4;
         }
         return height;
     }
 
-    private void renderModuleList(ScaledResolution resolution, List<String> moduleNames, int color) {
+    private int lineHeight(FontRenderer fontRenderer) {
+        if (mode.getValue() == Mode.CLEAN) {
+            return fontRenderer.FONT_HEIGHT + paddingY.getValue() * 2;
+        }
+        return fontRenderer.FONT_HEIGHT + 2;
+    }
+
+    private void renderModuleList(ScaledResolution resolution, List<Entry> entries) {
         Minecraft minecraft = Minecraft.getMinecraft();
+        FontRenderer fontRenderer = minecraft.fontRendererObj;
         int anchorX = Math.max(0, Math.min(x.getValue(), resolution.getScaledWidth()));
-        int anchorY = Math.max(0, Math.min(y.getValue(), Math.max(0, resolution.getScaledHeight() - minecraft.fontRendererObj.FONT_HEIGHT)));
+        int anchorY = Math.max(0, Math.min(y.getValue(), Math.max(0, resolution.getScaledHeight() - fontRenderer.FONT_HEIGHT)));
         boolean rightAligned = anchorX >= resolution.getScaledWidth() / 2;
         int lineY = anchorY;
-        boolean modern = mode.getValue() == Mode.MODERN;
 
+        Mode current = mode.getValue();
         if (logo.isEnabled()) {
-            lineY += drawLogo(minecraft, anchorX, lineY, rightAligned, modern ? getModernColor(0) : color);
+            lineY += drawLogo(fontRenderer, anchorX, lineY, rightAligned, current == Mode.CLASSIC ? getClassicColor() : getModernColor(0));
         }
 
-        for (int i = 0; i < moduleNames.size(); i++) {
-            String moduleName = moduleNames.get(i);
-            int drawX = rightAligned ? anchorX - minecraft.fontRendererObj.getStringWidth(moduleName) : anchorX;
-            minecraft.fontRendererObj.drawStringWithShadow(moduleName, drawX, lineY, modern ? getModernColor(i) : color);
-            lineY += minecraft.fontRendererObj.FONT_HEIGHT + 2;
+        if (current == Mode.CLEAN) {
+            renderClean(fontRenderer, entries, anchorX, lineY, rightAligned);
+            return;
+        }
+
+        int color = current == Mode.CLASSIC ? getClassicColor() : 0;
+        for (int i = 0; i < entries.size(); i++) {
+            String line = entries.get(i).joined();
+            int drawX = rightAligned ? anchorX - fontRenderer.getStringWidth(line) : anchorX;
+            int lineColor = current == Mode.MODERN ? getModernColor(i) : color;
+            fontRenderer.drawStringWithShadow(line, drawX, lineY, lineColor);
+            lineY += fontRenderer.FONT_HEIGHT + 2;
         }
     }
 
-    private int drawLogo(Minecraft minecraft, int anchorX, int lineY, boolean rightAligned, int color) {
-        float scaledWidth = minecraft.fontRendererObj.getStringWidth(LOGO_TEXT) * LOGO_SCALE;
+    private void renderClean(FontRenderer fontRenderer, List<Entry> entries, int anchorX, int startY, boolean rightAligned) {
+        int padX = paddingX.getValue();
+        int padY = paddingY.getValue();
+        int radius = rounding.getValue();
+        int boxHeight = fontRenderer.FONT_HEIGHT + padY * 2;
+        int textColor = getTextColor();
+        int detailColor = getDetailColor();
+        int spaceWidth = fontRenderer.getStringWidth(" ");
+
+        int lineY = startY;
+        for (Entry entry : entries) {
+            int nameWidth = fontRenderer.getStringWidth(entry.name);
+            int textWidth = entryWidth(fontRenderer, entry);
+
+            int textLeft = rightAligned ? (anchorX - textWidth) : anchorX;
+            float boxLeft = textLeft - padX;
+            float boxRight = textLeft + textWidth + padX;
+
+            GuiGfx.roundedRect(boxLeft, lineY, boxRight, lineY + boxHeight, radius, BOX_COLOR);
+
+            int textY = lineY + padY;
+            fontRenderer.drawString(entry.name, textLeft, textY, textColor);
+            if (!entry.detail.isEmpty()) {
+                fontRenderer.drawString(entry.detail, textLeft + nameWidth + spaceWidth, textY, detailColor);
+            }
+
+            lineY += boxHeight;
+        }
+    }
+
+    private int entryWidth(FontRenderer fontRenderer, Entry entry) {
+        int width = fontRenderer.getStringWidth(entry.name);
+        if (!entry.detail.isEmpty()) {
+            width += fontRenderer.getStringWidth(" ") + fontRenderer.getStringWidth(entry.detail);
+        }
+        return width;
+    }
+
+    private int drawLogo(FontRenderer fontRenderer, int anchorX, int lineY, boolean rightAligned, int color) {
+        float scaledWidth = fontRenderer.getStringWidth(LOGO_TEXT) * LOGO_SCALE;
         float drawX = rightAligned ? anchorX - scaledWidth : anchorX;
 
         net.minecraft.client.renderer.GlStateManager.pushMatrix();
         net.minecraft.client.renderer.GlStateManager.translate(drawX, (float) lineY, 0.0F);
         net.minecraft.client.renderer.GlStateManager.scale(LOGO_SCALE, LOGO_SCALE, 1.0F);
-        minecraft.fontRendererObj.drawStringWithShadow(LOGO_TEXT, 0.0F, 0.0F, color);
+        fontRenderer.drawStringWithShadow(LOGO_TEXT, 0.0F, 0.0F, color);
         net.minecraft.client.renderer.GlStateManager.popMatrix();
 
-        return (int) (minecraft.fontRendererObj.FONT_HEIGHT * LOGO_SCALE) + 4;
+        return (int) (fontRenderer.FONT_HEIGHT * LOGO_SCALE) + 4;
     }
 
-    private List<String> getEnabledModuleNames() {
-        List<String> moduleNames = new ArrayList<String>();
+    private List<Entry> getEnabledEntries() {
+        List<Entry> entries = new ArrayList<Entry>();
         LionClient client = LionClient.getInstance();
         if (client == null) {
-            return moduleNames;
+            return entries;
         }
 
         for (Module module : client.getModuleManager().getModules()) {
@@ -179,44 +279,58 @@ public final class HudModule extends Module {
                 continue;
             }
             String hudInfo = module.getHudInfo();
-            moduleNames.add(hudInfo == null || hudInfo.isEmpty() ? module.getName() : module.getName() + " " + hudInfo);
+            String detail = hudInfo == null ? "" : hudInfo;
+            entries.add(new Entry(transform(module.getName()), transform(detail)));
         }
 
-        sortByWidth(moduleNames);
-        return moduleNames;
+        sortByWidth(entries);
+        return entries;
     }
 
-    private List<String> getPreviewModuleNames() {
-        List<String> moduleNames = getEnabledModuleNames();
-        if (moduleNames.isEmpty()) {
-            moduleNames.add("KillAura");
-            moduleNames.add("AutoClicker");
-            moduleNames.add("Sprint");
-            sortByWidth(moduleNames);
+    private List<Entry> getPreviewEntries() {
+        List<Entry> entries = getEnabledEntries();
+        if (entries.isEmpty()) {
+            entries = getSampleEntries();
         }
-        return moduleNames;
+        return entries;
     }
 
-    private void sortByWidth(final List<String> moduleNames) {
-        final Minecraft minecraft = Minecraft.getMinecraft();
-        Collections.sort(moduleNames, new Comparator<String>() {
+    private List<Entry> getSampleEntries() {
+        List<Entry> entries = new ArrayList<Entry>();
+        entries.add(new Entry(transform("KillAura"), transform("regular")));
+        entries.add(new Entry(transform("AutoClicker"), transform("butterfly")));
+        entries.add(new Entry(transform("Sprint"), ""));
+        sortByWidth(entries);
+        return entries;
+    }
+
+    private String transform(String text) {
+        if (text == null) {
+            return "";
+        }
+        return lowercase.isEnabled() ? text.toLowerCase(java.util.Locale.ROOT) : text;
+    }
+
+    private void sortByWidth(final List<Entry> entries) {
+        final FontRenderer fontRenderer = Minecraft.getMinecraft().fontRendererObj;
+        Collections.sort(entries, new Comparator<Entry>() {
             @Override
-            public int compare(String left, String right) {
-                return minecraft.fontRendererObj.getStringWidth(right) - minecraft.fontRendererObj.getStringWidth(left);
+            public int compare(Entry left, Entry right) {
+                return entryWidth(fontRenderer, right) - entryWidth(fontRenderer, left);
             }
         });
     }
 
-    private int getMaxTextWidth(Minecraft minecraft, List<String> moduleNames) {
-        int width = 0;
-        for (String moduleName : moduleNames) {
-            width = Math.max(width, minecraft.fontRendererObj.getStringWidth(moduleName));
-        }
-        return width;
+    private int getClassicColor() {
+        return 0xFF000000 | ((red.getValue() & 255) << 16) | ((green.getValue() & 255) << 8) | (blue.getValue() & 255);
     }
 
-    private int getColor() {
-        return 0xFF000000 | ((red.getValue() & 255) << 16) | ((green.getValue() & 255) << 8) | (blue.getValue() & 255);
+    private int getTextColor() {
+        return 0xFF000000 | ((textRed.getValue() & 255) << 16) | ((textGreen.getValue() & 255) << 8) | (textBlue.getValue() & 255);
+    }
+
+    private int getDetailColor() {
+        return 0xFF000000 | ((detailRed.getValue() & 255) << 16) | ((detailGreen.getValue() & 255) << 8) | (detailBlue.getValue() & 255);
     }
 
     private int getModernColor(int index) {
@@ -225,7 +339,23 @@ public final class HudModule extends Module {
         return 0xFF000000 | ClickGuiModule.blendColor(ClickGuiModule.getLightAccentColor(), ClickGuiModule.getDarkAccentColor(), wave);
     }
 
+    /** A single HUD line: module name plus an optional detail suffix, coloured independently. */
+    private static final class Entry {
+        private final String name;
+        private final String detail;
+
+        private Entry(String name, String detail) {
+            this.name = name == null ? "" : name;
+            this.detail = detail == null ? "" : detail;
+        }
+
+        private String joined() {
+            return detail.isEmpty() ? name : name + " " + detail;
+        }
+    }
+
     private enum Mode {
+        CLEAN("Clean"),
         MODERN("Modern"),
         CLASSIC("Classic");
 
