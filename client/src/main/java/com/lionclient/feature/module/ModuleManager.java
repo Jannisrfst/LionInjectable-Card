@@ -18,6 +18,7 @@ import com.lionclient.feature.module.impl.KillAuraModule;
 import com.lionclient.feature.module.impl.ClutchModule;
 import com.lionclient.feature.module.impl.KnockbackDelayModule;
 import com.lionclient.feature.module.impl.LegitScaffoldModule;
+import com.lionclient.feature.module.impl.NullMoveModule;
 import com.lionclient.feature.module.impl.NametagsModule;
 import com.lionclient.feature.module.impl.PlayerEspModule;
 import com.lionclient.feature.module.impl.ReachModule;
@@ -50,8 +51,10 @@ public final class ModuleManager {
 
         register(new SprintModule());
         register(new StasisModule());
+        register(new NullMoveModule());
         register(new BedPlatesModule());
         register(new LegitScaffoldModule());
+        register(new NullMoveModule());
         register(new AutoClickerModule());
         register(new RightClickerModule());
         register(new ReachModule());
