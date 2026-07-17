@@ -85,7 +85,8 @@ public final class ModuleCardRenderer {
         int descTop = headerTop + HEADER_HEIGHT + SECTION_GAP;
         drawExpandButton(m, contentLeft, descTop, progress, mouseX, mouseY, alpha, fr);
         int descTextX = contentLeft + EXPAND_BUTTON_SIZE + 6;
-        fr.drawString(m.getDescription(), descTextX, descTop + ((DESC_ROW_HEIGHT - fr.FONT_HEIGHT) / 2),
+        String description = fitToWidth(fr, m.getDescription(), contentRight - descTextX);
+        fr.drawString(description, descTextX, descTop + ((DESC_ROW_HEIGHT - fr.FONT_HEIGHT) / 2),
             GuiGfx.scaleAlpha(CardTheme.TEXT_DIM, alpha));
 
         if (progress <= 0.0F) {
@@ -102,7 +103,7 @@ public final class ModuleCardRenderer {
         Bounds clip = new Bounds(x, settingsTop, x + cardWidth, Math.max(settingsTop, settingsBottom));
         float settingsAlpha = alpha * GuiGfx.easeOut(progress);
 
-        GuiGfx.beginScissor(clip, net.minecraft.client.Minecraft.getMinecraft());
+        GuiGfx.beginScissor(clip, net.minecraft.client.Minecraft.getMinecraft(), CardTheme.scale());
         int rowY = settingsTop;
         for (Setting setting : settings) {
             int rowHeight = SettingRenderer.heightOf(setting, contentWidth, fr);
@@ -190,11 +191,33 @@ public final class ModuleCardRenderer {
         GuiGfx.roundedRect(buttonBounds.left, buttonBounds.top, buttonBounds.right, buttonBounds.bottom, 3.0F, fill);
         GuiGfx.roundedOutline(buttonBounds.left, buttonBounds.top, buttonBounds.right, buttonBounds.bottom, 3.0F, 1.0F, GuiGfx.scaleAlpha(CardTheme.CARD_BORDER, alpha));
 
-        String symbol = progress > 0.5F ? "-" : "+";
-        int textWidth = fr.getStringWidth(symbol);
-        int textX = buttonBounds.left + ((buttonBounds.width() - textWidth) / 2);
-        int textY = buttonBounds.top + ((buttonBounds.height() - fr.FONT_HEIGHT) / 2);
-        fr.drawString(symbol, textX, textY, GuiGfx.scaleAlpha(CardTheme.TEXT, alpha));
+        // Draw the +/- as primitives so it is pixel-perfectly centred; the vanilla font glyphs
+        // for "+" and "-" sit at different heights and never centre cleanly in a small box.
+        int glyphColor = GuiGfx.scaleAlpha(CardTheme.TEXT, alpha);
+        float cx = buttonBounds.left + (buttonBounds.width() / 2.0F);
+        float cy = buttonBounds.top + (buttonBounds.height() / 2.0F);
+        float arm = 3.0F;
+        float half = 0.75F;
+        GuiGfx.roundedRect(cx - arm, cy - half, cx + arm, cy + half, 0.0F, glyphColor);
+        if (progress <= 0.5F) {
+            GuiGfx.roundedRect(cx - half, cy - arm, cx + half, cy + arm, 0.0F, glyphColor);
+        }
+    }
+
+    /** Truncates {@code text} with an ellipsis so it never exceeds {@code maxWidth} pixels. */
+    private static String fitToWidth(FontRenderer fr, String text, int maxWidth) {
+        if (text == null || text.isEmpty() || maxWidth <= 0) {
+            return text == null ? "" : text;
+        }
+        if (fr.getStringWidth(text) <= maxWidth) {
+            return text;
+        }
+        String ellipsis = "...";
+        int room = maxWidth - fr.getStringWidth(ellipsis);
+        if (room <= 0) {
+            return fr.trimStringToWidth(text, maxWidth);
+        }
+        return fr.trimStringToWidth(text, room) + ellipsis;
     }
 
     private static Bounds headerToggleBounds(int contentRight, int headerTop) {

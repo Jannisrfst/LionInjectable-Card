@@ -94,7 +94,7 @@ public final class CardClickGuiScreen extends GuiScreen {
         Layout layout = createLayout(scaledWidth, scaledHeight);
         CategoryTab.draw(layout.navX, layout.navY, layout.columnWidth, selectedTab, scaledMouseX, scaledMouseY, 1.0F, this.fontRendererObj);
 
-        GuiGfx.beginScissor(layout.contentBounds, this.mc);
+        GuiGfx.beginScissor(layout.contentBounds, this.mc, scale);
         if (selectedTab == CategoryTab.Tab.PROFILES) {
             drawProfilesTab(layout, scaledMouseX, scaledMouseY);
         } else if (selectedTab.isModuleTab()) {

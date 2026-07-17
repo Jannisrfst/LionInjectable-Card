@@ -102,15 +102,23 @@ public final class GuiGfx {
     }
 
     public static void beginScissor(Bounds b, Minecraft mc) {
+        beginScissor(b, mc, 1.0F);
+    }
+
+    /**
+     * Clips to {@code b}. {@code extraScale} must match any additional matrix scale currently
+     * applied on top of the vanilla GUI scale (e.g. the card GUI's own zoom), otherwise the
+     * scissor box lands at the wrong position and content bleeds outside the viewport.
+     */
+    public static void beginScissor(Bounds b, Minecraft mc, float extraScale) {
         ScaledResolution resolution = new ScaledResolution(mc);
-        int scaleFactor = resolution.getScaleFactor();
+        float factor = resolution.getScaleFactor() * extraScale;
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
-        GL11.glScissor(
-            b.left * scaleFactor,
-            mc.displayHeight - (b.bottom * scaleFactor),
-            Math.max(0, b.width() * scaleFactor),
-            Math.max(0, b.height() * scaleFactor)
-        );
+        int left = Math.round(b.left * factor);
+        int bottom = Math.round(b.bottom * factor);
+        int width = Math.max(0, Math.round(b.width() * factor));
+        int height = Math.max(0, Math.round(b.height() * factor));
+        GL11.glScissor(left, mc.displayHeight - bottom, width, height);
     }
 
     public static void endScissor() {
