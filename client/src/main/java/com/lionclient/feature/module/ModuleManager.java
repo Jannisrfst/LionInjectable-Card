@@ -26,6 +26,7 @@ import com.lionclient.feature.module.impl.RightClickerModule;
 import com.lionclient.feature.module.impl.SprintModule;
 import com.lionclient.feature.module.impl.StasisModule;
 import com.lionclient.feature.module.impl.TrajectoriesModule;
+import com.lionclient.feature.module.impl.WTapModule;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -63,6 +64,7 @@ public final class ModuleManager {
         register(new AimAssistModule());
         register(new KillAuraModule());
         register(new KnockbackDelayModule());
+        register(new WTapModule());
         if (lion.client.hook.LauncherDetection.detect().kind
                 != lion.client.hook.LauncherDetection.Kind.BADLION) {
             register(new AutoBlockModule());
