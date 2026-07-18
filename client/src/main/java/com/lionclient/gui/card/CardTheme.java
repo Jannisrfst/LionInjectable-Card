@@ -5,6 +5,7 @@ import com.lionclient.feature.module.impl.ClickGuiModule;
 public final class CardTheme {
     public static final int BG = 0xFF0D0D0F;
     public static final int BG_BLUR_TINT = 0x66000000;
+    public static final int NAV_BG = 0xC20E0E10; // leicht transparent, damit die Nav auf dem Blur schwebt
     public static final int CARD = 0xFF161618;
     public static final int CARD_HOVER = 0xFF1D1D20;
     public static final int CARD_BORDER = 0xFF262629;

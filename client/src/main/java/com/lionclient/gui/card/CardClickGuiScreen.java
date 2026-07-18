@@ -27,11 +27,13 @@ import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
 
 public final class CardClickGuiScreen extends GuiScreen {
-    private static final int COLUMN_WIDTH = 320;
+    private static final int PREFERRED_CARD_WIDTH = 236;
+    private static final int MAX_COLUMNS = 2;
     private static final int TOP_MARGIN = 40;
     private static final int BOTTOM_MARGIN = 24;
     private static final int NAV_CONTENT_GAP = 10;
     private static final int CARD_GAP = 8;
+    private static final int SIDE_MARGIN = 32;
 
     private final ModuleManager moduleManager;
     private final Map<Module, Float> expandProgress = new HashMap<Module, Float>();
@@ -103,7 +105,7 @@ public final class CardClickGuiScreen extends GuiScreen {
         state.accent = CardTheme.accent();
 
         Layout layout = createLayout(scaledWidth, scaledHeight);
-        CategoryTab.draw(layout.navX, layout.navY, layout.columnWidth, selectedTab, scaledMouseX, scaledMouseY, 1.0F, this.fontRendererObj);
+        CategoryTab.draw(layout.navX, layout.navY, layout.gridWidth, selectedTab, scaledMouseX, scaledMouseY, 1.0F, this.fontRendererObj);
 
         GuiGfx.beginScissor(layout.contentBounds, this.mc, scale);
         if (selectedTab == CategoryTab.Tab.PROFILES) {
@@ -120,29 +122,27 @@ public final class CardClickGuiScreen extends GuiScreen {
 
     private void drawModuleTab(Layout layout, int mouseX, int mouseY) {
         List<Module> modules = collectModules(selectedTab);
-        float maxScroll = Math.max(0.0F, totalContentHeight(modules, layout.columnWidth) - layout.contentBounds.height());
+        float maxScroll = Math.max(0.0F, totalContentHeight(modules, layout) - layout.contentBounds.height());
         scrollTarget = GuiGfx.clamp(scrollTarget, 0.0F, maxScroll);
         scroll = GuiGfx.animate(scroll, scrollTarget, 0.24F);
 
-        int y = layout.contentBounds.top - Math.round(scroll);
-        for (Module module : modules) {
-            float progress = progressOf(module);
-            int height = ModuleCardRenderer.heightOf(module, progress, layout.columnWidth, this.fontRendererObj);
-            if (y + height >= layout.contentBounds.top && y <= layout.contentBounds.bottom) {
-                ModuleCardRenderer.draw(module, layout.contentBounds.left, y, layout.columnWidth, progress, mouseX, mouseY, 1.0F, this.fontRendererObj, state);
+        int baseTop = layout.contentBounds.top - Math.round(scroll);
+        List<PlacedCard> placed = layoutCards(modules, layout, baseTop);
+        for (PlacedCard card : placed) {
+            if (card.y + card.height >= layout.contentBounds.top && card.y <= layout.contentBounds.bottom) {
+                ModuleCardRenderer.draw(card.module, card.x, card.y, card.width, progressOf(card.module), mouseX, mouseY, 1.0F, this.fontRendererObj, state);
             }
-            y += height + CARD_GAP;
         }
     }
 
     private void drawProfilesTab(Layout layout, int mouseX, int mouseY) {
         ConfigManager configManager = moduleManager.getConfigManager();
-        float maxScroll = Math.max(0.0F, ProfilesPanel.contentHeight(configManager, layout.columnWidth, this.fontRendererObj) - layout.contentBounds.height());
+        float maxScroll = Math.max(0.0F, ProfilesPanel.contentHeight(configManager, layout.gridWidth, this.fontRendererObj) - layout.contentBounds.height());
         scrollTarget = GuiGfx.clamp(scrollTarget, 0.0F, maxScroll);
         scroll = GuiGfx.animate(scroll, scrollTarget, 0.24F);
 
         int y = layout.contentBounds.top - Math.round(scroll);
-        ProfilesPanel.draw(configManager, layout.contentBounds.left, y, layout.columnWidth, mouseX, mouseY, 1.0F, this.fontRendererObj);
+        ProfilesPanel.draw(configManager, layout.contentBounds.left, y, layout.gridWidth, mouseX, mouseY, 1.0F, this.fontRendererObj);
     }
 
     @Override
@@ -159,7 +159,7 @@ public final class CardClickGuiScreen extends GuiScreen {
             return;
         }
 
-        CategoryTab.Tab clickedTab = CategoryTab.clicked(layout.navX, layout.navY, layout.columnWidth, scaledMouseX, scaledMouseY, this.fontRendererObj);
+        CategoryTab.Tab clickedTab = CategoryTab.clicked(layout.navX, layout.navY, layout.gridWidth, scaledMouseX, scaledMouseY, this.fontRendererObj);
         if (clickedTab != null) {
             if (clickedTab == CategoryTab.Tab.UNLOAD) {
                 performUnload();
@@ -178,7 +178,7 @@ public final class CardClickGuiScreen extends GuiScreen {
         }
 
         if (selectedTab == CategoryTab.Tab.PROFILES) {
-            ProfilesPanel.click(moduleManager.getConfigManager(), layout.contentBounds.left, layout.contentBounds.top - Math.round(scroll), layout.columnWidth, scaledMouseX, scaledMouseY, mouseButton, this.fontRendererObj);
+            ProfilesPanel.click(moduleManager.getConfigManager(), layout.contentBounds.left, layout.contentBounds.top - Math.round(scroll), layout.gridWidth, scaledMouseX, scaledMouseY, mouseButton, this.fontRendererObj);
             super.mouseClicked(mouseX, mouseY, mouseButton);
             return;
         }
@@ -192,22 +192,20 @@ public final class CardClickGuiScreen extends GuiScreen {
 
     private void handleModuleClick(Layout layout, int mouseX, int mouseY, int mouseButton) {
         List<Module> modules = collectModules(selectedTab);
-        int y = layout.contentBounds.top - Math.round(scroll);
-        for (Module module : modules) {
-            float progress = progressOf(module);
-            int height = ModuleCardRenderer.heightOf(module, progress, layout.columnWidth, this.fontRendererObj);
-            if (mouseY >= y && mouseY <= y + height) {
-                ModuleCardRenderer.ClickResult result = ModuleCardRenderer.click(module, layout.contentBounds.left, y, layout.columnWidth, progress, mouseX, mouseY, mouseButton, this.fontRendererObj, state);
+        int baseTop = layout.contentBounds.top - Math.round(scroll);
+        List<PlacedCard> placed = layoutCards(modules, layout, baseTop);
+        for (PlacedCard card : placed) {
+            if (mouseX >= card.x && mouseX <= card.x + card.width && mouseY >= card.y && mouseY <= card.y + card.height) {
+                ModuleCardRenderer.ClickResult result = ModuleCardRenderer.click(card.module, card.x, card.y, card.width, progressOf(card.module), mouseX, mouseY, mouseButton, this.fontRendererObj, state);
                 if (result == ModuleCardRenderer.ClickResult.EXPAND_TOGGLED) {
-                    if (expandedModules.contains(module)) {
-                        expandedModules.remove(module);
+                    if (expandedModules.contains(card.module)) {
+                        expandedModules.remove(card.module);
                     } else {
-                        expandedModules.add(module);
+                        expandedModules.add(card.module);
                     }
                 }
                 return;
             }
-            y += height + CARD_GAP;
         }
     }
 
@@ -226,17 +224,15 @@ public final class CardClickGuiScreen extends GuiScreen {
         Layout layout = createLayout(scaledWidth, scaledHeight);
 
         List<Module> modules = collectModules(selectedTab);
-        int y = layout.contentBounds.top - Math.round(scroll);
-        for (Module module : modules) {
-            float progress = progressOf(module);
-            int height = ModuleCardRenderer.heightOf(module, progress, layout.columnWidth, this.fontRendererObj);
-            for (Setting setting : module.getSettings()) {
+        int baseTop = layout.contentBounds.top - Math.round(scroll);
+        List<PlacedCard> placed = layoutCards(modules, layout, baseTop);
+        for (PlacedCard card : placed) {
+            for (Setting setting : card.module.getSettings()) {
                 if (setting == state.draggingSetting) {
-                    SettingRenderer.drag(setting, layout.contentBounds.left + 12, y, layout.columnWidth - 24, scaledMouseX, scaledMouseY, state);
+                    SettingRenderer.drag(setting, card.x + 12, card.y, card.width - 24, scaledMouseX, scaledMouseY, state);
                     return;
                 }
             }
-            y += height + CARD_GAP;
         }
     }
 
@@ -372,22 +368,70 @@ public final class CardClickGuiScreen extends GuiScreen {
         return value == null ? 0.0F : value.floatValue();
     }
 
-    private float totalContentHeight(List<Module> modules, int columnWidth) {
+    /**
+     * Places the module cards into a row-major grid (1 or 2 columns depending on available width).
+     * Render, click and drag all consume this single list so their geometry can never desync.
+     * Each row's height is the tallest card in the row (cards expand independently).
+     */
+    private List<PlacedCard> layoutCards(List<Module> modules, Layout layout, int baseTop) {
+        List<PlacedCard> placed = new ArrayList<PlacedCard>(modules.size());
+        int cols = layout.columns;
+        int cardWidth = layout.cardWidth;
+        int rowTop = baseTop;
+        for (int i = 0; i < modules.size(); i += cols) {
+            int rowHeight = 0;
+            for (int c = 0; c < cols && (i + c) < modules.size(); c++) {
+                Module module = modules.get(i + c);
+                int h = ModuleCardRenderer.heightOf(module, progressOf(module), cardWidth, this.fontRendererObj);
+                if (h > rowHeight) {
+                    rowHeight = h;
+                }
+            }
+            for (int c = 0; c < cols && (i + c) < modules.size(); c++) {
+                Module module = modules.get(i + c);
+                int h = ModuleCardRenderer.heightOf(module, progressOf(module), cardWidth, this.fontRendererObj);
+                int cardX = layout.contentBounds.left + (c * (cardWidth + CARD_GAP));
+                placed.add(new PlacedCard(module, cardX, rowTop, cardWidth, h));
+            }
+            rowTop += rowHeight + CARD_GAP;
+        }
+        return placed;
+    }
+
+    private float totalContentHeight(List<Module> modules, Layout layout) {
+        int cols = layout.columns;
+        int cardWidth = layout.cardWidth;
         float height = 0.0F;
-        for (Module module : modules) {
-            height += ModuleCardRenderer.heightOf(module, progressOf(module), columnWidth, this.fontRendererObj) + CARD_GAP;
+        for (int i = 0; i < modules.size(); i += cols) {
+            int rowHeight = 0;
+            for (int c = 0; c < cols && (i + c) < modules.size(); c++) {
+                Module module = modules.get(i + c);
+                int h = ModuleCardRenderer.heightOf(module, progressOf(module), cardWidth, this.fontRendererObj);
+                if (h > rowHeight) {
+                    rowHeight = h;
+                }
+            }
+            height += rowHeight + CARD_GAP;
         }
         return height;
     }
 
     private Layout createLayout(int scaledWidth, int scaledHeight) {
-        int columnWidth = Math.min(COLUMN_WIDTH, scaledWidth - 32);
-        int navX = (scaledWidth - columnWidth) / 2;
+        int available = scaledWidth - SIDE_MARGIN;
+        int columns = 1;
+        int cardWidth = Math.max(120, Math.min(PREFERRED_CARD_WIDTH, available));
+        // Use a second column only when there is comfortably room for two full-width cards + gap.
+        if (MAX_COLUMNS >= 2 && available >= (PREFERRED_CARD_WIDTH * 2) + CARD_GAP) {
+            columns = 2;
+            cardWidth = PREFERRED_CARD_WIDTH;
+        }
+        int gridWidth = (cardWidth * columns) + (CARD_GAP * (columns - 1));
+        int gridX = (scaledWidth - gridWidth) / 2;
         int navY = TOP_MARGIN;
         int contentTop = navY + CategoryTab.height() + NAV_CONTENT_GAP;
         int contentBottom = scaledHeight - BOTTOM_MARGIN;
-        Bounds contentBounds = new Bounds(navX, contentTop, navX + columnWidth, Math.max(contentTop, contentBottom));
-        return new Layout(navX, navY, columnWidth, contentBounds);
+        Bounds contentBounds = new Bounds(gridX, contentTop, gridX + gridWidth, Math.max(contentTop, contentBottom));
+        return new Layout(gridX, navY, gridWidth, columns, cardWidth, contentBounds);
     }
 
     private boolean handleValueEditorMouseClick(Layout layout, int mouseX, int mouseY, int mouseButton) {
@@ -469,16 +513,36 @@ public final class CardClickGuiScreen extends GuiScreen {
         return GuiGfx.clamp(delta, 0.0F, 0.05F);
     }
 
+    private static final class PlacedCard {
+        private final Module module;
+        private final int x;
+        private final int y;
+        private final int width;
+        private final int height;
+
+        private PlacedCard(Module module, int x, int y, int width, int height) {
+            this.module = module;
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+        }
+    }
+
     private static final class Layout {
         private final int navX;
         private final int navY;
-        private final int columnWidth;
+        private final int gridWidth;
+        private final int columns;
+        private final int cardWidth;
         private final Bounds contentBounds;
 
-        private Layout(int navX, int navY, int columnWidth, Bounds contentBounds) {
+        private Layout(int navX, int navY, int gridWidth, int columns, int cardWidth, Bounds contentBounds) {
             this.navX = navX;
             this.navY = navY;
-            this.columnWidth = columnWidth;
+            this.gridWidth = gridWidth;
+            this.columns = columns;
+            this.cardWidth = cardWidth;
             this.contentBounds = contentBounds;
         }
     }

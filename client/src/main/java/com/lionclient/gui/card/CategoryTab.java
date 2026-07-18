@@ -7,6 +7,8 @@ public final class CategoryTab {
     private static final int OUTER_PAD = 4;
     private static final int BAR_HEIGHT = 28;
     private static final float CORNER_RADIUS = 12.0F;
+    private static final int PILL_PAD_X = 10;  // horizontales Padding der schmalen Tab-Pille um das Label
+    private static final int PILL_INSET_Y = 3; // vertikaler Abstand der Pille zum Nav-Rand
 
     private CategoryTab() {
     }
@@ -57,8 +59,9 @@ public final class CategoryTab {
         int right = x + width;
         int bottom = y + height();
 
-        GuiGfx.roundedRect(x, y, right, bottom, CORNER_RADIUS, GuiGfx.scaleAlpha(CardTheme.BG, alpha));
-        GuiGfx.roundedOutline(x, y, right, bottom, CORNER_RADIUS, 1.0F, GuiGfx.scaleAlpha(CardTheme.CARD_BORDER, alpha));
+        // Leicht transparenter Nav-Hintergrund, damit die Leiste auf dem Blur schwebt statt als
+        // solider schwarzer Kasten zu sitzen. Keine helle Outline mehr (Referenz hat keinen Rand).
+        GuiGfx.roundedRect(x, y, right, bottom, CORNER_RADIUS, GuiGfx.scaleAlpha(CardTheme.NAV_BG, alpha));
 
         Tab[] tabs = Tab.values();
         for (int i = 0; i < tabs.length; i++) {
@@ -67,11 +70,20 @@ public final class CategoryTab {
             boolean isSelected = tab == selected;
             boolean hovered = bounds.contains(mouseX, mouseY);
 
+            String label = tab.label();
+            int textWidth = fr.getStringWidth(label);
+            int textX = bounds.left + ((bounds.width() - textWidth) / 2);
+            int textY = bounds.top + ((bounds.height() - fr.FONT_HEIGHT) / 2);
+
+            // Schmale Pille, die nur das Label umschließt (statt den ganzen Slot zu füllen), wie in der Referenz.
+            int pillLeft = textX - PILL_PAD_X;
+            int pillRight = textX + textWidth + PILL_PAD_X;
+            int pillTop = bounds.top + PILL_INSET_Y;
+            int pillBottom = bounds.bottom - PILL_INSET_Y;
             if (isSelected) {
-                int fill = hovered ? CardTheme.CARD_HOVER : CardTheme.CARD_HOVER;
-                GuiGfx.pill(bounds.left, bounds.top, bounds.right, bounds.bottom, GuiGfx.scaleAlpha(fill, alpha));
+                GuiGfx.pill(pillLeft, pillTop, pillRight, pillBottom, GuiGfx.scaleAlpha(CardTheme.CARD_HOVER, alpha));
             } else if (hovered) {
-                GuiGfx.pill(bounds.left, bounds.top, bounds.right, bounds.bottom, GuiGfx.scaleAlpha(CardTheme.CARD, alpha * 0.6F));
+                GuiGfx.pill(pillLeft, pillTop, pillRight, pillBottom, GuiGfx.scaleAlpha(CardTheme.CARD, alpha * 0.6F));
             }
 
             int textColor;
@@ -84,11 +96,6 @@ public final class CategoryTab {
             } else {
                 textColor = CardTheme.TEXT_DIM;
             }
-
-            String label = tab.label();
-            int textWidth = fr.getStringWidth(label);
-            int textX = bounds.left + ((bounds.width() - textWidth) / 2);
-            int textY = bounds.top + ((bounds.height() - fr.FONT_HEIGHT) / 2);
             fr.drawString(label, textX, textY, GuiGfx.scaleAlpha(textColor, alpha));
         }
     }
