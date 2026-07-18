@@ -8,6 +8,7 @@ import com.lionclient.feature.setting.BooleanSetting;
 import com.lionclient.feature.setting.EnumSetting;
 import com.lionclient.feature.setting.NumberSetting;
 import com.lionclient.gui.card.GuiGfx;
+import com.lionclient.gui.render.HudBlurRenderer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -29,6 +30,8 @@ public final class HudModule extends Module {
 
     /** Dark translucent fill used behind each line in the Clean style. */
     private static final int BOX_COLOR = 0xC81E1E22;
+    /** Lighter tint drawn over the frosted-glass blur so the scene stays readable behind it. */
+    private static final int BOX_COLOR_BLUR = 0x551E1E22;
 
     private final EnumSetting<Mode> mode = new EnumSetting<Mode>("Mode", Mode.values(), Mode.CLEAN);
     private final BooleanSetting logo = new BooleanSetting("Logo", false);
@@ -38,6 +41,8 @@ public final class HudModule extends Module {
     private final NumberSetting paddingX = new NumberSetting("Padding X", 0, 20, 1, 5);
     private final NumberSetting paddingY = new NumberSetting("Padding Y", 0, 20, 1, 2);
     private final NumberSetting rounding = new NumberSetting("Rounding", 0, 12, 1, 4);
+    private final BooleanSetting blur = new BooleanSetting("Blur", false);
+    private final NumberSetting blurStrength = new NumberSetting("Blur strength", 1, 4, 1, 2);
 
     // Clean-style colors
     private final NumberSetting textRed = new NumberSetting("Text red", 0, 255, 5, 232);
@@ -86,9 +91,18 @@ public final class HudModule extends Module {
             }
         };
 
+        BooleanSupplier isCleanBlur = new BooleanSupplier() {
+            @Override
+            public boolean getAsBoolean() {
+                return mode.getValue() == Mode.CLEAN && blur.isEnabled();
+            }
+        };
+
         paddingX.setVisibility(isClean);
         paddingY.setVisibility(isClean);
         rounding.setVisibility(isClean);
+        blur.setVisibility(isClean);
+        blurStrength.setVisibility(isCleanBlur);
         textRed.setVisibility(isClean);
         textGreen.setVisibility(isClean);
         textBlue.setVisibility(isClean);
@@ -105,6 +119,8 @@ public final class HudModule extends Module {
         addSetting(paddingX);
         addSetting(paddingY);
         addSetting(rounding);
+        addSetting(blur);
+        addSetting(blurStrength);
         addSetting(textRed);
         addSetting(textGreen);
         addSetting(textBlue);
@@ -225,16 +241,31 @@ public final class HudModule extends Module {
         int detailColor = getDetailColor();
         int spaceWidth = fontRenderer.getStringWidth(" ");
 
+        // Precompute each line's box geometry so the blur can be drawn behind all boxes in one pass.
+        List<float[]> regions = new ArrayList<float[]>(entries.size());
         int lineY = startY;
         for (Entry entry : entries) {
-            int nameWidth = fontRenderer.getStringWidth(entry.name);
             int textWidth = entryWidth(fontRenderer, entry);
-
             int textLeft = rightAligned ? (anchorX - textWidth) : anchorX;
             float boxLeft = textLeft - padX;
             float boxRight = textLeft + textWidth + padX;
+            regions.add(new float[] { boxLeft, lineY, boxRight, lineY + boxHeight, radius });
+            lineY += boxHeight;
+        }
 
-            GuiGfx.roundedRect(boxLeft, lineY, boxRight, lineY + boxHeight, radius, BOX_COLOR);
+        // Frosted-glass blur behind the boxes. Falls back cleanly to the opaque box if unavailable.
+        boolean blurred = blur.isEnabled() && HudBlurRenderer.render(regions, blurStrength.getValue());
+        int boxColor = blurred ? BOX_COLOR_BLUR : BOX_COLOR;
+
+        lineY = startY;
+        int index = 0;
+        for (Entry entry : entries) {
+            int nameWidth = fontRenderer.getStringWidth(entry.name);
+            int textWidth = entryWidth(fontRenderer, entry);
+            int textLeft = rightAligned ? (anchorX - textWidth) : anchorX;
+
+            float[] box = regions.get(index++);
+            GuiGfx.roundedRect(box[0], box[1], box[2], box[3], radius, boxColor);
 
             int textY = lineY + padY;
             fontRenderer.drawString(entry.name, textLeft, textY, textColor);
