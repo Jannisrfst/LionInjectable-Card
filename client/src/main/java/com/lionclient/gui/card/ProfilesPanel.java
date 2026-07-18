@@ -4,55 +4,58 @@ import com.lionclient.config.ConfigManager;
 import java.util.List;
 import net.minecraft.client.gui.FontRenderer;
 
+/**
+ * Profiles tab rendered as a compact 2-column card grid (mirrors the module-card grid).
+ * Each profile card: name + subtitle, with a folder and a trash icon-button top-right.
+ * Clicking the card body loads that profile; the last grid cell is a "+ New Profile" card.
+ * Layout is computed once in {@link #layout} so draw and click can never desync.
+ */
 public final class ProfilesPanel {
-    private static final int HEADER_HEIGHT = 28;
-    private static final int HEADER_GAP = 10;
-    private static final int ROW_HEIGHT = 30;
-    private static final int ROW_GAP = 6;
-    private static final int PAD = 12;
+    private static final int COLUMNS = 2;
+    private static final int CARD_HEIGHT = 52;
+    private static final int CARD_GAP = 8;
+    private static final int PAD = 10;
+    private static final int ICON_BUTTON = 16;
+    private static final int ICON_GLYPH = 10;
     private static final float RADIUS = 10.0F;
 
     private ProfilesPanel() {
     }
 
     public static int contentHeight(ConfigManager cm, int width, FontRenderer fr) {
-        List<String> configs = cm.listConfigs();
-        int rows = configs.size();
-        int height = HEADER_HEIGHT + HEADER_GAP;
-        if (rows > 0) {
-            height += (rows * ROW_HEIGHT) + ((rows - 1) * ROW_GAP);
-        }
-        return height;
+        int count = cm.listConfigs().size() + 1; // + "New Profile" card
+        int rows = (count + COLUMNS - 1) / COLUMNS;
+        return rows * (CARD_HEIGHT + CARD_GAP);
     }
 
     public static void draw(ConfigManager cm, int x, int y, int width, int mouseX, int mouseY, float alpha, FontRenderer fr) {
-        Layout layout = layout(cm, x, y, width);
-
-        drawButton(layout.newButton, "+ New Profile", false, mouseX, mouseY, alpha, fr);
-        drawButton(layout.openFolderButton, "Open Folder", false, mouseX, mouseY, alpha, fr);
-
+        Cell[] cells = layout(cm, x, y, width);
         String current = cm.getCurrentConfigName();
-        for (int i = 0; i < layout.rows.length; i++) {
-            Row row = layout.rows[i];
-            boolean active = row.name.equals(current);
-            boolean hovered = row.card.contains(mouseX, mouseY);
 
-            int fill = hovered ? CardTheme.CARD_HOVER : CardTheme.CARD;
-            GuiGfx.roundedRect(row.card.left, row.card.top, row.card.right, row.card.bottom, RADIUS, GuiGfx.scaleAlpha(fill, alpha));
-            int borderColor = active ? CardTheme.accent() : CardTheme.CARD_BORDER;
-            GuiGfx.roundedOutline(row.card.left, row.card.top, row.card.right, row.card.bottom, RADIUS, active ? 1.5F : 1.0F, GuiGfx.scaleAlpha(borderColor, alpha));
-
-            int textColor = active ? CardTheme.TEXT : CardTheme.TEXT_DIM;
-            int textY = row.card.top + ((row.card.height() - fr.FONT_HEIGHT) / 2);
-            fr.drawString(row.name, row.card.left + PAD, textY, GuiGfx.scaleAlpha(textColor, alpha));
-
-            if (active) {
-                String activeLabel = "ACTIVE";
-                fr.drawString(activeLabel, row.card.left + PAD + fr.getStringWidth(row.name) + 8, textY, GuiGfx.scaleAlpha(CardTheme.accent(), alpha));
+        for (Cell cell : cells) {
+            if (cell.isNew) {
+                drawNewCard(cell.card, mouseX, mouseY, alpha, fr);
+                continue;
             }
 
-            drawButton(row.deleteButton, "Delete", true, mouseX, mouseY, alpha, fr);
-            drawButton(row.loadButton, "Load", false, mouseX, mouseY, alpha, fr);
+            boolean active = cell.name.equals(current);
+            boolean hovered = cell.card.contains(mouseX, mouseY);
+
+            int fill = hovered ? CardTheme.CARD_HOVER : CardTheme.CARD;
+            GuiGfx.roundedRect(cell.card.left, cell.card.top, cell.card.right, cell.card.bottom, RADIUS, GuiGfx.scaleAlpha(fill, alpha));
+            int borderColor = active ? CardTheme.accent() : CardTheme.CARD_BORDER;
+            GuiGfx.roundedOutline(cell.card.left, cell.card.top, cell.card.right, cell.card.bottom, RADIUS, active ? 1.5F : 1.0F, GuiGfx.scaleAlpha(borderColor, alpha));
+
+            int nameMaxWidth = cell.folderButton.left - 6 - (cell.card.left + PAD);
+            String name = fit(fr, cell.name, nameMaxWidth);
+            fr.drawString(name, cell.card.left + PAD, cell.card.top + PAD, GuiGfx.scaleAlpha(CardTheme.TEXT, alpha));
+
+            String subtitle = active ? "Active configuration" : "Saved profile";
+            int subColor = active ? CardTheme.accent() : CardTheme.TEXT_DIM;
+            fr.drawString(subtitle, cell.card.left + PAD, cell.card.top + PAD + fr.FONT_HEIGHT + 4, GuiGfx.scaleAlpha(subColor, alpha));
+
+            drawIconButton(cell.folderButton, false, mouseX, mouseY, alpha);
+            drawIconButton(cell.trashButton, true, mouseX, mouseY, alpha);
         }
     }
 
@@ -61,25 +64,27 @@ public final class ProfilesPanel {
             return false;
         }
 
-        Layout layout = layout(cm, x, y, width);
+        Cell[] cells = layout(cm, x, y, width);
+        for (Cell cell : cells) {
+            if (cell.isNew) {
+                if (cell.card.contains(mouseX, mouseY)) {
+                    cm.createNextConfig();
+                    return true;
+                }
+                continue;
+            }
 
-        if (layout.newButton.contains(mouseX, mouseY)) {
-            cm.createNextConfig();
-            return true;
-        }
-        if (layout.openFolderButton.contains(mouseX, mouseY)) {
-            cm.openFolder();
-            return true;
-        }
-
-        for (Row row : layout.rows) {
-            if (row.loadButton.contains(mouseX, mouseY)) {
-                cm.load(row.name);
+            if (cell.trashButton.contains(mouseX, mouseY)) {
+                cm.load(cell.name);
+                cm.deleteCurrentConfig();
                 return true;
             }
-            if (row.deleteButton.contains(mouseX, mouseY)) {
-                cm.load(row.name);
-                cm.deleteCurrentConfig();
+            if (cell.folderButton.contains(mouseX, mouseY)) {
+                cm.openFolder();
+                return true;
+            }
+            if (cell.card.contains(mouseX, mouseY)) {
+                cm.load(cell.name);
                 return true;
             }
         }
@@ -87,68 +92,115 @@ public final class ProfilesPanel {
         return false;
     }
 
-    private static void drawButton(Bounds b, String label, boolean danger, int mouseX, int mouseY, float alpha, FontRenderer fr) {
+    private static void drawNewCard(Bounds card, int mouseX, int mouseY, float alpha, FontRenderer fr) {
+        boolean hovered = card.contains(mouseX, mouseY);
+        int fill = hovered ? CardTheme.CARD_HOVER : CardTheme.CARD;
+        GuiGfx.roundedRect(card.left, card.top, card.right, card.bottom, RADIUS, GuiGfx.scaleAlpha(fill, alpha));
+        GuiGfx.roundedOutline(card.left, card.top, card.right, card.bottom, RADIUS, 1.0F, GuiGfx.scaleAlpha(CardTheme.accent(), alpha));
+
+        String label = "+ New Profile";
+        int textX = card.left + ((card.width() - fr.getStringWidth(label)) / 2);
+        int textY = card.top + ((card.height() - fr.FONT_HEIGHT) / 2);
+        fr.drawString(label, textX, textY, GuiGfx.scaleAlpha(hovered ? CardTheme.TEXT : CardTheme.accent(), alpha));
+    }
+
+    private static void drawIconButton(Bounds b, boolean danger, int mouseX, int mouseY, float alpha) {
         boolean hovered = b.contains(mouseX, mouseY);
-        int base = danger ? CardTheme.DANGER : CardTheme.BADGE_BG;
-        int fill = hovered ? GuiGfx.mix(base, 0xFFFFFFFF, danger ? 0.15F : 0.08F) : base;
-        int textColor = danger ? CardTheme.TEXT : CardTheme.TEXT;
-        GuiGfx.badge(b, label, fill, textColor, alpha, fr);
+        if (hovered) {
+            GuiGfx.roundedRect(b.left, b.top, b.right, b.bottom, 3.0F, GuiGfx.scaleAlpha(CardTheme.BADGE_BG, alpha));
+        }
+
+        int color;
+        if (danger) {
+            color = CardTheme.DANGER;
+        } else {
+            color = hovered ? CardTheme.TEXT : CardTheme.TEXT_DIM;
+        }
+        int argb = GuiGfx.scaleAlpha(color, alpha);
+
+        int cx = (b.left + b.right) / 2;
+        int cy = (b.top + b.bottom) / 2;
+        if (danger) {
+            drawTrashIcon(cx, cy, ICON_GLYPH, argb);
+        } else {
+            drawFolderIcon(cx, cy, ICON_GLYPH, argb);
+        }
     }
 
-    private static Layout layout(ConfigManager cm, int x, int y, int width) {
-        int right = x + width;
+    private static void drawFolderIcon(int cx, int cy, int size, int argb) {
+        float half = size / 2.0F;
+        float l = cx - half;
+        float r = cx + half;
+        float t = cy - half;
+        float b = cy + half;
+        float bodyTop = t + (size * 0.28F);
+        GuiGfx.roundedRect(l, t + (size * 0.12F), l + (size * 0.5F), bodyTop + 1.0F, 1.0F, argb); // Lasche
+        GuiGfx.roundedRect(l, bodyTop, r, b, 1.5F, argb);                                          // Korpus
+    }
 
-        int newButtonWidth = 100;
-        int openFolderWidth = 110;
-        int headerTop = y;
-        int headerBottom = headerTop + HEADER_HEIGHT;
-        Bounds newButton = new Bounds(x, headerTop, x + newButtonWidth, headerBottom);
-        Bounds openFolderButton = new Bounds(right - openFolderWidth, headerTop, right, headerBottom);
+    private static void drawTrashIcon(int cx, int cy, int size, int argb) {
+        float half = size / 2.0F;
+        float l = cx - half;
+        float r = cx + half;
+        float t = cy - half;
+        float b = cy + half;
+        float lidTop = t + (size * 0.14F);
+        GuiGfx.roundedRect(cx - (size * 0.16F), t, cx + (size * 0.16F), lidTop, 0.5F, argb);        // Griff
+        GuiGfx.roundedRect(l, lidTop, r, lidTop + (size * 0.16F), 0.5F, argb);                       // Deckel
+        GuiGfx.roundedRect(l + (size * 0.12F), lidTop + (size * 0.22F), r - (size * 0.12F), b, 1.0F, argb); // Behälter
+    }
 
+    private static String fit(FontRenderer fr, String text, int maxWidth) {
+        if (maxWidth <= 0 || fr.getStringWidth(text) <= maxWidth) {
+            return text;
+        }
+        String ellipsis = "…";
+        int budget = maxWidth - fr.getStringWidth(ellipsis);
+        if (budget <= 0) {
+            return ellipsis;
+        }
+        return fr.trimStringToWidth(text, budget) + ellipsis;
+    }
+
+    private static Cell[] layout(ConfigManager cm, int x, int y, int width) {
         List<String> configs = cm.listConfigs();
-        Row[] rows = new Row[configs.size()];
-        int rowTop = headerBottom + HEADER_GAP;
-        for (int i = 0; i < configs.size(); i++) {
-            String name = configs.get(i);
-            Bounds card = new Bounds(x, rowTop, right, rowTop + ROW_HEIGHT);
+        int count = configs.size() + 1; // + "New Profile" card
+        int cardWidth = (width - (CARD_GAP * (COLUMNS - 1))) / COLUMNS;
 
-            int loadWidth = 60;
-            int deleteWidth = 60;
-            int actionTop = card.top + 4;
-            int actionBottom = card.bottom - 4;
-            Bounds loadButton = new Bounds(right - PAD - loadWidth, actionTop, right - PAD, actionBottom);
-            Bounds deleteButton = new Bounds(loadButton.left - 6 - deleteWidth, actionTop, loadButton.left - 6, actionBottom);
+        Cell[] cells = new Cell[count];
+        for (int i = 0; i < count; i++) {
+            int col = i % COLUMNS;
+            int row = i / COLUMNS;
+            int cardX = x + (col * (cardWidth + CARD_GAP));
+            int cardY = y + (row * (CARD_HEIGHT + CARD_GAP));
+            Bounds card = new Bounds(cardX, cardY, cardX + cardWidth, cardY + CARD_HEIGHT);
 
-            rows[i] = new Row(name, card, loadButton, deleteButton);
-            rowTop += ROW_HEIGHT + ROW_GAP;
+            if (i >= configs.size()) {
+                cells[i] = new Cell(card, null, true, null, null);
+                continue;
+            }
+
+            int iconY = card.top + 6;
+            Bounds trash = new Bounds(card.right - PAD - ICON_BUTTON, iconY, card.right - PAD, iconY + ICON_BUTTON);
+            Bounds folder = new Bounds(trash.left - 4 - ICON_BUTTON, iconY, trash.left - 4, iconY + ICON_BUTTON);
+            cells[i] = new Cell(card, configs.get(i), false, folder, trash);
         }
-
-        return new Layout(newButton, openFolderButton, rows);
+        return cells;
     }
 
-    private static final class Layout {
-        final Bounds newButton;
-        final Bounds openFolderButton;
-        final Row[] rows;
-
-        Layout(Bounds newButton, Bounds openFolderButton, Row[] rows) {
-            this.newButton = newButton;
-            this.openFolderButton = openFolderButton;
-            this.rows = rows;
-        }
-    }
-
-    private static final class Row {
-        final String name;
+    private static final class Cell {
         final Bounds card;
-        final Bounds loadButton;
-        final Bounds deleteButton;
+        final String name;
+        final boolean isNew;
+        final Bounds folderButton;
+        final Bounds trashButton;
 
-        Row(String name, Bounds card, Bounds loadButton, Bounds deleteButton) {
-            this.name = name;
+        Cell(Bounds card, String name, boolean isNew, Bounds folderButton, Bounds trashButton) {
             this.card = card;
-            this.loadButton = loadButton;
-            this.deleteButton = deleteButton;
+            this.name = name;
+            this.isNew = isNew;
+            this.folderButton = folderButton;
+            this.trashButton = trashButton;
         }
     }
 }
