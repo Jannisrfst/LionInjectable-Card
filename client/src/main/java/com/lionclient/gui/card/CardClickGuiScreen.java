@@ -10,6 +10,7 @@ import com.lionclient.feature.setting.DecimalSetting;
 import com.lionclient.feature.setting.IntRangeSetting;
 import com.lionclient.feature.setting.NumberSetting;
 import com.lionclient.feature.setting.Setting;
+import com.lionclient.gui.render.HudBlurRenderer;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -84,7 +85,17 @@ public final class CardClickGuiScreen extends GuiScreen {
         int scaledMouseX = Math.round(mouseX / scale);
         int scaledMouseY = Math.round(mouseY / scale);
 
-        drawRect(0, 0, this.width, this.height, CardTheme.BG);
+        boolean blurred = false;
+        if (ClickGuiModule.isBackgroundBlurEnabled()) {
+            List<float[]> regions = new ArrayList<float[]>(1);
+            regions.add(new float[]{0.0F, 0.0F, this.width, this.height, 0.0F});
+            blurred = HudBlurRenderer.render(regions, ClickGuiModule.getBackgroundBlurStrength());
+        }
+        if (blurred) {
+            drawRect(0, 0, this.width, this.height, CardTheme.BG_BLUR_TINT); // dezente Abdunklung über dem Blur
+        } else {
+            drawRect(0, 0, this.width, this.height, CardTheme.BG);           // Fallback: opak schwarz wie bisher
+        }
 
         GlStateManager.pushMatrix();
         GlStateManager.scale(scale, scale, 1.0F);

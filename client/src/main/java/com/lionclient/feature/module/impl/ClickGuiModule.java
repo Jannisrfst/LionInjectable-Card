@@ -26,6 +26,8 @@ public final class ClickGuiModule extends Module {
     private final NumberSetting cardGreen = new NumberSetting("Card Green", 0, 255, 1, 84);
     private final NumberSetting cardBlue = new NumberSetting("Card Blue", 0, 255, 1, 32);
     private final EnumSetting<CardScale> cardScale = new EnumSetting<CardScale>("Card Scale", CardScale.values(), CardScale.NORMAL);
+    private final BooleanSetting backgroundBlur = new BooleanSetting("Background Blur", true);
+    private final NumberSetting backgroundBlurStrength = new NumberSetting("Blur Strength", 1, 4, 1, 2);
 
     public ClickGuiModule() {
         super("ClickGUI", "Configure the ClickGUI", Category.CLIENT, Keyboard.KEY_RSHIFT);
@@ -42,6 +44,8 @@ public final class ClickGuiModule extends Module {
         addSetting(cardGreen);
         addSetting(cardBlue);
         addSetting(cardScale);
+        addSetting(backgroundBlur);
+        addSetting(backgroundBlurStrength);
 
         java.util.function.BooleanSupplier classicVisibility = new java.util.function.BooleanSupplier() {
             @Override
@@ -73,6 +77,13 @@ public final class ClickGuiModule extends Module {
         cardGreen.setVisibility(cardVisibility);
         cardBlue.setVisibility(cardVisibility);
         cardScale.setVisibility(cardVisibility);
+        backgroundBlur.setVisibility(cardVisibility);
+        backgroundBlurStrength.setVisibility(new java.util.function.BooleanSupplier() {
+            @Override
+            public boolean getAsBoolean() {
+                return style.getValue() == GuiStyle.CARD && backgroundBlur.isEnabled();
+            }
+        });
     }
 
     @Override
@@ -111,6 +122,14 @@ public final class ClickGuiModule extends Module {
             return 1.0F;
         }
         return instance.cardScale.getValue().scale;
+    }
+
+    public static boolean isBackgroundBlurEnabled() {
+        return instance != null && instance.backgroundBlur.isEnabled();
+    }
+
+    public static int getBackgroundBlurStrength() {
+        return instance == null ? 2 : instance.backgroundBlurStrength.getValue();
     }
 
     public static ClickGuiModule getInstance() {
